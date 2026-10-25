@@ -1,12 +1,14 @@
-name: Pubblica sito
+name: Pubblica sito e aggiorna sentieri
 
 on:
   push:
     branches: [main]
-  workflow_dispatch:
+  schedule:
+    - cron: "37 3 * * 1"   # ogni lunedì alle 3:37 (ora UTC) scarica sentieri, rifugi e fontanelle
+  workflow_dispatch:         # pulsante "Run workflow" per farlo partire a mano
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -17,14 +19,71 @@ concurrency:
 jobs:
   pubblica:
     runs-on: ubuntu-latest
+    env:
+      # Notifica sull'iPhone con l'app ntfy: il nome del canale sta nel secret NTFY_TOPIC.
+      # Se il secret non c'è, la notifica viene saltata.
+      NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+      ESITO: /tmp/esito.txt
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
+
+      # Solo il lunedì o col pulsante: a ogni caricamento di file si pubblica e basta
+      - name: Scarica sentieri, rifugi e fontanelle da OpenStreetMap
+        id: sentieri
+        if: github.event_name != 'push'
+        continue-on-error: true
+        timeout-minutes: 60
+        run: node aggiorna_sentieri.js
+
+      - name: Salva i dati nel repository
+        if: github.event_name != 'push'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ -d dati ]; then git add dati; fi
+          if git diff --cached --quiet; then
+            echo "Nessuna novità"
+          else
+            git commit -m "Aggiornamento sentieri $(date -u +%Y-%m-%d)"
+            git push
+          fi
+
       - uses: actions/configure-pages@v6
+
       - uses: actions/upload-pages-artifact@v5
         with:
           path: .
+
       - id: deploy
         uses: actions/deploy-pages@v5
+
+      # ✅ tutte le zone aggiornate · ⚠️ solo alcune · ❌ niente aggiornato o pubblicazione fallita
+      - name: Notifica sull'iPhone
+        if: always() && env.NTFY_TOPIC != '' && github.event_name != 'push'
+        env:
+          STATO_JOB: ${{ job.status }}
+          LINK: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          try:
+              ok, tot = (int(x) for x in open(os.environ["ESITO"], encoding="utf-8").read().strip().split(";"))
+          except Exception:
+              ok, tot = 0, 0
+          if os.environ["STATO_JOB"] != "success" or ok == 0:
+              msg = ("Aggiornamento fallito", "Sentieri non aggiornati: restano quelli vecchi. Tocca per vedere cosa è successo su GitHub.", "x", 4)
+          elif ok < tot:
+              msg = ("Aggiornamento parziale", f"Sentieri aggiornati in {ok} zone su {tot}.", "warning", 4)
+          else:
+              msg = ("Sentieri aggiornati", f"Tutte le {tot} zone sono aggiornate.", "white_check_mark", 3)
+          titolo, testo, tag, prio = msg
+          corpo = {"topic": os.environ["NTFY_TOPIC"], "title": "Trekking: " + titolo,
+                   "message": testo, "tags": [tag], "priority": prio, "click": os.environ["LINK"]}
+          req = urllib.request.Request("https://ntfy.sh/", data=json.dumps(corpo).encode(),
+                                       headers={"Content-Type": "application/json"})
+          urllib.request.urlopen(req, timeout=30).read()
+          print("Notifica inviata:", titolo, "-", testo)
+          PY

@@ -15,8 +15,14 @@ Web app per il telefono che mostra i **sentieri** vicino a te, con lo stesso asp
 
 ## Come funziona
 
-- I dati vengono chiesti direttamente a Overpass dal telefono, per un riquadro poco più largo del raggio scelto
-  (2–15 km). Non c'è un workflow che li prepara: i sentieri con la loro traccia, per tutta Italia, sarebbero troppi.
+- **Dati salvati nel sito, come in Qui Parcheggi.** Ogni lunedì GitHub esegue `aggiorna_sentieri.js`
+  (workflow `.github/workflows/pubblica.yml`): scarica da Overpass sentieri e punti delle zone elencate in `ZONE`
+  (oggi le stesse di Qui Parcheggi: Pavia, Milano, Varese e Biandronno), allargate di 15 km per lato, e li salva nella
+  cartella `dati/` divisi in tessere da 0,1°. Se una zona non si scarica resta la versione precedente.
+  Dentro una zona l'app legge da lì; fuori zona interroga i server pubblici di Overpass (2–15 km intorno a te).
+  Per aggiungere una zona basta una riga in `ZONE`; per scaricare subito: Actions → *Pubblica sito e aggiorna sentieri* → *Run workflow*.
+- Alla fine dello scaricamento arriva una notifica sull'iPhone con l'app **ntfy** (✅ / ⚠️ / ❌) se nel repository c'è
+  il secret `NTFY_TOPIC` con il nome del canale (Settings → Secrets and variables → Actions).
 - L'ultima risposta resta sul telefono (IndexedDB): in montagna senza campo l'app usa quella.
   Anche le quote calcolate e le foto delle fontanelle restano sul telefono.
 - Pulsanti in basso: **rifugio** più vicino (aperto, se gli orari lo dicono) e **fontanella** più vicina.
@@ -36,5 +42,6 @@ Impostazioni del repository → Pages → Source: **GitHub Actions**. A ogni mod
 - `app.js`: mappa, GPS, sentieri, elenco, impostazioni
 - `config.js`: impostazioni iniziali e numero di versione
 - `sw.js`, `manifest.webmanifest`: installazione come app
-- `.github/workflows/pubblica.yml`: pubblicazione su GitHub Pages
+- `aggiorna_sentieri.js`, `.github/workflows/pubblica.yml`: scaricamento settimanale delle zone e pubblicazione
+- `dati/`: sentieri e punti salvati (creata da GitHub, non toccare)
 - `icon-*.png`, `favicon-64.png`, `apple-touch-icon.png`: logo Qui con le montagne

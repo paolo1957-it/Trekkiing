@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="style.css?v=2">
+  <link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
   <div class="app">
@@ -237,8 +237,10 @@
         <section id="g-dati">
           <h3>Da dove vengono i dati</h3>
           <ul class="g-punti">
-            <li>Sentieri, rifugi e fontanelle vengono da <b>OpenStreetMap</b>: l'app li chiede ogni volta per la zona intorno a te.
-              Gli ultimi dati scaricati restano sul telefono: se in montagna non c'è campo, l'app usa quelli.</li>
+            <li>Sentieri, rifugi e fontanelle vengono da <b>OpenStreetMap</b>. Per le zone principali (oggi Pavia, Milano,
+              Varese e Biandronno, con 15 km intorno) ogni settimana il sito li scarica e li tiene pronti: lì l'app è veloce e
+              non dipende dai server di OpenStreetMap. Fuori da queste zone l'app li chiede ogni volta a OpenStreetMap, e può volerci più di un minuto.</li>
+            <li>Gli ultimi dati scaricati restano sul telefono: se in montagna non c'è campo, l'app usa quelli.</li>
             <li>La <b>difficoltà</b> è quella indicata dal CAI (tag <i>cai_scale</i>); se manca si usa la scala svizzera convertita. Se non c'è nessuna delle due il sentiero è grigio.</li>
             <li>Il <b>segnavia</b> è quello descritto su OpenStreetMap (tag <i>osmc:symbol</i>); per i sentieri CAI senza descrizione si mostra il classico bianco e rosso.</li>
             <li>Le <b>quote</b> per il dislivello stimato vengono dal modello del terreno Copernicus (precisione di circa 30 metri, tramite Open-Meteo): il risultato è indicativo.</li>
@@ -266,8 +268,8 @@
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="config.js?v=2"></script>
-  <script src="core.js?v=2"></script>
-  <script src="app.js?v=2"></script>
+  <script src="config.js?v=3"></script>
+  <script src="core.js?v=3"></script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>

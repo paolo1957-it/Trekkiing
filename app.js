@@ -198,10 +198,59 @@
     throw ultimoErrore || new Error("nessun server Overpass");
   }
 
-  async function caricaDati(lat, lon, raggio, forza) {
-    if (!forza && ultimo && Date.now() - ultimo.quando < 60 * 60000 && copre(ultimo, lat, lon, raggio)) {
-      return { ...ultimo, fonte: "memoria" };
+  // ---------- Dati salvati nel sito (come Qui Parcheggi) ----------
+  // Ogni settimana GitHub scarica sentieri e punti delle zone principali e li salva nella cartella "dati"
+  // del sito, divisi in tessere. Se sei dentro una zona l'app li legge da lì, senza dipendere da Overpass.
+  let indiceSito = null, indiceLetto = 0;
+  async function leggiIndice(forza) {
+    if (!forza && indiceSito && Date.now() - indiceLetto < 30 * 60000) return indiceSito;
+    try {
+      indiceSito = await fetchJson("dati/indice.json", { cache: "no-cache" }, 10000);
+      indiceLetto = Date.now();
+    } catch (e) { indiceSito = null; }
+    return indiceSito;
+  }
+  async function dalSito(lat, lon, raggio, forza) {
+    const ind = await leggiIndice(forza);
+    if (!ind || !ind.zone) return null;
+    const zona = Object.values(ind.zone).find((z) => {
+      const [s, w, n, e] = z.bbox;
+      return lat >= s && lat <= n && lon >= w && lon <= e;
+    });
+    if (!zona) return null;
+    const passo = ind.passo || 0.1;
+    const esistenti = new Set(zona.tessere || []);
+    const [s, w, n, e] = QT.riquadro(lat, lon, raggio);
+    const nomi = [];
+    for (let i = Math.floor(s / passo); i <= Math.floor(n / passo); i++) {
+      for (let j = Math.floor(w / passo); j <= Math.floor(e / passo); j++) {
+        const t = `t_${i}_${j}.json`;
+        if (esistenti.has(t)) nomi.push(t);
+      }
     }
+    const parti = await Promise.all(nomi.map((t) => fetchJson(`dati/${zona.cartella}/${t}`, {}, 30000)));
+    return {
+      lat, lon, raggio,
+      sentieri: parti.flatMap((p) => p.s || []),
+      punti: parti.flatMap((p) => p.p || []),
+      quando: Date.parse(zona.aggiornato) || Date.now()
+    };
+  }
+
+  async function caricaDati(lat, lon, raggio, forza) {
+    if (!forza && ultimo && Date.now() - (ultimo.letto || ultimo.quando) < 60 * 60000 && copre(ultimo, lat, lon, raggio)) {
+      return { ...ultimo, fonte: ultimo.fonte === "sito" ? "sito" : "memoria" };
+    }
+    // 1. Dentro una zona: i dati salvati nel sito
+    try {
+      const sito = await dalSito(lat, lon, raggio, forza);
+      if (sito) {
+        ultimo = { ...sito, fonte: "sito", letto: Date.now() };
+        Memoria.salva("dati", "ultimo", ultimo).catch(() => {});
+        return ultimo;
+      }
+    } catch (e) { console.warn("Dati del sito non disponibili", e); }
+    // 2. Fuori zona: i server pubblici di OpenStreetMap
     try {
       ultimo = await daOverpass(lat, lon, raggio);
       Memoria.salva("dati", "ultimo", ultimo).catch(() => {});
@@ -273,7 +322,7 @@
     $("btn-aggiorna").classList.add("gira");
     const { lat, lon } = stato.centro;
     if (!silenzioso) messaggio("Cerco sentieri, rifugi e fontanelle entro " + QT.formattaDistanza(stato.raggio) + "…");
-    if (!silenzioso && !stato.sentieri.length) toast("Scarico i sentieri da OpenStreetMap…");
+    if (!silenzioso && !stato.sentieri.length) toast("Scarico i sentieri…");
     let errore = null;
     try {
       const r = await caricaDati(lat, lon, stato.raggio, forza);
@@ -315,7 +364,7 @@
     if (quandoDati) {
       const d = new Date(quandoDati);
       const oggi = d.toDateString() === new Date().toDateString();
-      dati = " · dati OpenStreetMap scaricati " + (oggi ? "alle " + d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })
+      dati = (fonteDati === "sito" ? " · dati OpenStreetMap salvati nel sito, aggiornati " : " · dati OpenStreetMap scaricati ") + (oggi ? "alle " + d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })
         : "il " + d.toLocaleDateString("it-IT", { day: "numeric", month: "long" }));
       if (fonteDati === "salvati") dati += " (salvati sul telefono, senza rete)";
     }

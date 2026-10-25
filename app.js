@@ -198,28 +198,36 @@
     throw ultimoErrore || new Error("nessun server Overpass");
   }
 
-  // ---------- Dati salvati nel sito (come Qui Parcheggi) ----------
-  // Ogni settimana GitHub scarica sentieri e punti delle zone principali e li salva nella cartella "dati"
-  // del sito, divisi in tessere. Se sei dentro una zona l'app li legge da lì, senza dipendere da Overpass.
+  // ---------- Dati salvati nel sito ----------
+  // Ogni lunedì GitHub scarica sentieri e punti di tutta la Lombardia (più 15 km oltre i confini) e li salva nella
+  // cartella "dati" del sito, divisi in tessere. In Lombardia l'app li legge da lì, senza dipendere da Overpass.
+  // Ogni sentiero è salvato una volta sola, nella sua tessera "di casa": le altre tessere che attraversa
+  // dicono solo dov'è, e quella tessera si scarica in un secondo momento.
   let indiceSito = null, indiceLetto = 0;
+  const tessereSito = new Map();   // nome → contenuto
   async function leggiIndice(forza) {
     if (!forza && indiceSito && Date.now() - indiceLetto < 30 * 60000) return indiceSito;
     try {
-      indiceSito = await fetchJson("dati/indice.json", { cache: "no-cache" }, 10000);
+      const nuovo = await fetchJson("dati/indice.json", { cache: "no-cache" }, 10000);
+      if (!indiceSito || nuovo.aggiornato !== indiceSito.aggiornato) tessereSito.clear();   // dati nuovi
+      indiceSito = nuovo;
       indiceLetto = Date.now();
     } catch (e) { indiceSito = null; }
     return indiceSito;
   }
+  async function leggiTessere(nomi) {
+    const mancanti = nomi.filter((t) => !tessereSito.has(t));
+    const parti = await Promise.all(mancanti.map((t) => fetchJson("dati/" + t, {}, 30000)));
+    mancanti.forEach((t, i) => tessereSito.set(t, parti[i]));
+    return nomi.map((t) => tessereSito.get(t));
+  }
   async function dalSito(lat, lon, raggio, forza) {
     const ind = await leggiIndice(forza);
-    if (!ind || !ind.zone) return null;
-    const zona = Object.values(ind.zone).find((z) => {
-      const [s, w, n, e] = z.bbox;
-      return lat >= s && lat <= n && lon >= w && lon <= e;
-    });
-    if (!zona) return null;
+    if (!ind || !ind.zona || !ind.tessere) return null;
+    const [zs, zw, zn, ze] = ind.zona;
+    if (!(lat >= zs && lat <= zn && lon >= zw && lon <= ze)) return null;
     const passo = ind.passo || 0.1;
-    const esistenti = new Set(zona.tessere || []);
+    const esistenti = new Set(ind.tessere);
     const [s, w, n, e] = QT.riquadro(lat, lon, raggio);
     const nomi = [];
     for (let i = Math.floor(s / passo); i <= Math.floor(n / passo); i++) {
@@ -228,12 +236,17 @@
         if (esistenti.has(t)) nomi.push(t);
       }
     }
-    const parti = await Promise.all(nomi.map((t) => fetchJson(`dati/${zona.cartella}/${t}`, {}, 30000)));
+    const vicine = await leggiTessere(nomi);
+    // sentieri che passano di qui ma sono salvati in altre tessere
+    const altrove = new Set();
+    for (const c of vicine) for (const casa of Object.values(c.r || {})) if (!nomi.includes(casa) && esistenti.has(casa)) altrove.add(casa);
+    const lontane = await leggiTessere([...altrove]);
+    const servono = new Set(vicine.flatMap((c) => [...(c.s || []).map((x) => x.i), ...Object.keys(c.r || {})]));
     return {
       lat, lon, raggio,
-      sentieri: parti.flatMap((p) => p.s || []),
-      punti: parti.flatMap((p) => p.p || []),
-      quando: Date.parse(zona.aggiornato) || Date.now()
+      sentieri: vicine.concat(lontane).flatMap((c) => c.s || []).filter((x) => servono.has(x.i)),
+      punti: vicine.flatMap((c) => c.p || []),
+      quando: Date.parse(ind.aggiornato) || Date.now()
     };
   }
 
@@ -241,7 +254,7 @@
     if (!forza && ultimo && Date.now() - (ultimo.letto || ultimo.quando) < 60 * 60000 && copre(ultimo, lat, lon, raggio)) {
       return { ...ultimo, fonte: ultimo.fonte === "sito" ? "sito" : "memoria" };
     }
-    // 1. Dentro una zona: i dati salvati nel sito
+    // 1. In Lombardia: i dati salvati nel sito
     try {
       const sito = await dalSito(lat, lon, raggio, forza);
       if (sito) {
@@ -250,7 +263,7 @@
         return ultimo;
       }
     } catch (e) { console.warn("Dati del sito non disponibili", e); }
-    // 2. Fuori zona: i server pubblici di OpenStreetMap
+    // 2. Fuori dalla Lombardia (o sito senza dati): i server pubblici di OpenStreetMap
     try {
       ultimo = await daOverpass(lat, lon, raggio);
       Memoria.salva("dati", "ultimo", ultimo).catch(() => {});
@@ -448,7 +461,10 @@
     const lung = s.parz && !s.lt ? ["≥ " + QT.formattaKm(s.l), "lunghezza (qui solo il tratto in zona)"]
       : [QT.formattaKm(s.l), "lunghezza" + (s.anello ? " (ad anello)" : s.parz ? " totale" : "")];
     const caselle = [lung];
-    if (su != null) caselle.push([`↗ ${su} m`, "salita" + stima], [`↘ ${giu ?? "?"} m`, "discesa" + stima]);
+    if (su != null) {
+      caselle.push([`↗ ${su} m`, "salita" + stima]);
+      if (giu != null) caselle.push([`↘ ${giu} m`, "discesa" + stima]);
+    }
     else caselle.push(["…", "dislivello: calcolo"]);
     if (q && q.max != null) caselle.push([`${q.min}–${QT.formattaQuota(q.max)}`, "quota min–max" + zona]);
     // con il dislivello stimato sul tratto in zona, anche il tempo vale per quel tratto

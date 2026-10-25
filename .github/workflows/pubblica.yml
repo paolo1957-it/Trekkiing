@@ -4,11 +4,12 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: "37 3 * * 1"   # ogni lunedì alle 3:37 (ora UTC) scarica sentieri, rifugi e fontanelle
-  workflow_dispatch:         # pulsante "Run workflow" per farlo partire a mano
+    # ogni lunedì alle 3:37 (ora UTC): riscarica sentieri, rifugi e fontanelle di tutta la Lombardia
+    - cron: "37 3 * * 1"
+  workflow_dispatch:         # pulsante "Run workflow": riscarica subito i dati da OpenStreetMap
 
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
@@ -30,26 +31,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # Solo il lunedì o col pulsante: a ogni caricamento di file si pubblica e basta
-      - name: Scarica sentieri, rifugi e fontanelle da OpenStreetMap
-        id: sentieri
-        if: github.event_name != 'push'
-        continue-on-error: true
-        timeout-minutes: 60
+      # I dati non stanno nel repository: il lunedì (o col pulsante) si riscaricano da OpenStreetMap,
+      # negli altri casi si ricopiano quelli già pubblicati. Se Overpass non risponde restano quelli vecchi.
+      - name: Scarica i sentieri della Lombardia da OpenStreetMap
+        id: dati
+        timeout-minutes: 150
+        continue-on-error: true   # senza dati, l'app chiede i sentieri direttamente dal telefono
+        env:
+          SITO: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+          FORZA: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}
         run: node aggiorna_sentieri.js
-
-      - name: Salva i dati nel repository
-        if: github.event_name != 'push'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if [ -d dati ]; then git add dati; fi
-          if git diff --cached --quiet; then
-            echo "Nessuna novità"
-          else
-            git commit -m "Aggiornamento sentieri $(date -u +%Y-%m-%d)"
-            git push
-          fi
 
       - uses: actions/configure-pages@v6
 
@@ -60,30 +51,41 @@ jobs:
       - id: deploy
         uses: actions/deploy-pages@v5
 
-      # ✅ tutte le zone aggiornate · ⚠️ solo alcune · ❌ niente aggiornato o pubblicazione fallita
+      # ✅ dati riscaricati · ❌ qualcosa è andato storto · ⚠️ Overpass non ha risposto e sono rimasti i dati vecchi
       - name: Notifica sull'iPhone
-        if: always() && env.NTFY_TOPIC != '' && github.event_name != 'push'
+        if: always() && env.NTFY_TOPIC != ''
         env:
           STATO_JOB: ${{ job.status }}
+          STATO_DATI: ${{ steps.dati.outcome }}
           LINK: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           python3 - <<'PY'
-          import json, os, urllib.request
+          import os, json, urllib.request
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
           try:
-              ok, tot = (int(x) for x in open(os.environ["ESITO"], encoding="utf-8").read().strip().split(";"))
+              stato, quando, n = open(os.environ["ESITO"], encoding="utf-8").read().strip().split(";")
           except Exception:
-              ok, tot = 0, 0
-          if os.environ["STATO_JOB"] != "success" or ok == 0:
-              msg = ("Aggiornamento fallito", "Sentieri non aggiornati: restano quelli vecchi. Tocca per vedere cosa è successo su GitHub.", "x", 4)
-          elif ok < tot:
-              msg = ("Aggiornamento parziale", f"Sentieri aggiornati in {ok} zone su {tot}.", "warning", 4)
+              stato, quando, n = "", "", ""
+          try:
+              giorno = datetime.fromisoformat(quando.replace("Z", "+00:00")).astimezone(ZoneInfo("Europe/Rome")).strftime("%d/%m")
+          except Exception:
+              giorno = "?"
+          msg = None
+          if os.environ["STATO_JOB"] != "success" or os.environ["STATO_DATI"] != "success" or not stato:
+              msg = ("Aggiornamento fallito", "Tocca per vedere cosa è successo su GitHub.", "x", 4)
+          elif stato == "nuovi":
+              msg = ("Sentieri aggiornati", f"Riscaricati da OpenStreetMap: {n} sentieri in Lombardia.", "white_check_mark", 3)
+          elif stato == "ripiego":
+              msg = ("Sentieri non aggiornati", f"OpenStreetMap non ha risposto: il sito resta al {giorno}.", "warning", 4)
+          if msg:
+              titolo, testo, tag, prio = msg
+              corpo = {"topic": os.environ["NTFY_TOPIC"], "title": "Trekking: " + titolo,
+                       "message": testo, "tags": [tag], "priority": prio, "click": os.environ["LINK"]}
+              req = urllib.request.Request("https://ntfy.sh/", data=json.dumps(corpo).encode(),
+                                           headers={"Content-Type": "application/json"})
+              urllib.request.urlopen(req, timeout=30).read()
+              print("Notifica inviata:", titolo, "-", testo)
           else:
-              msg = ("Sentieri aggiornati", f"Tutte le {tot} zone sono aggiornate.", "white_check_mark", 3)
-          titolo, testo, tag, prio = msg
-          corpo = {"topic": os.environ["NTFY_TOPIC"], "title": "Trekking: " + titolo,
-                   "message": testo, "tags": [tag], "priority": prio, "click": os.environ["LINK"]}
-          req = urllib.request.Request("https://ntfy.sh/", data=json.dumps(corpo).encode(),
-                                       headers={"Content-Type": "application/json"})
-          urllib.request.urlopen(req, timeout=30).read()
-          print("Notifica inviata:", titolo, "-", testo)
+              print("Niente da notificare")
           PY

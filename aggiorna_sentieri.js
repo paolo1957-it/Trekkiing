@@ -1,33 +1,35 @@
 #!/usr/bin/env node
 /*
- * Qui-Trekking – scarica una volta alla settimana da OpenStreetMap (Overpass) sentieri, rifugi, bivacchi,
- * fontanelle e sorgenti delle zone usate più spesso e li salva nel sito, divisi in "tessere".
- * Nelle zone l'app legge da qui e non dipende dai server pubblici di OpenStreetMap, spesso lenti o fuori uso.
+ * Qui-Trekking – scarica da OpenStreetMap (Overpass) sentieri, rifugi, bivacchi, fontanelle e sorgenti di tutta
+ * la Lombardia (più 15 km oltre i confini) e li salva nel sito, divisi in "tessere" da 0,1 gradi.
+ * Dentro la Lombardia l'app legge da qui e non dipende dai server pubblici di OpenStreetMap, spesso lenti o fuori uso.
  *
- * Lo esegue GitHub da solo (vedi .github/workflows/pubblica.yml). I file finiscono nella cartella dati/.
- * Per aggiungere una zona basta aggiungere una riga in ZONE qui sotto:
- *     "nome": [latitudine sud, longitudine ovest, latitudine nord, longitudine est]
- * I valori si trovano su https://bboxfinder.com
+ * Lo esegue GitHub (vedi .github/workflows/pubblica.yml): ogni lunedì riscarica tutto, a blocchi di mezzo grado
+ * per non chiedere troppo in una volta sola a Overpass. I dati NON vengono salvati nel repository, finiscono solo
+ * nel sito pubblicato (come in Qui-Pets): nelle altre pubblicazioni, o se Overpass non risponde, si ricopiano
+ * quelli già pubblicati.
  *
- * Uso: node aggiorna_sentieri.js   (variabile d'ambiente ESITO: file dove scrivere l'esito per la notifica)
+ * Per risparmiare spazio:
+ * - ogni sentiero è salvato una volta sola, nella tessera dove inizia ("casa"); le altre tessere che attraversa
+ *   ne hanno solo il numero e la tessera di casa, e l'app la scarica quando serve;
+ * - la traccia è semplificata: si tiene un punto ogni circa 5 metri.
+ *
+ * Uso: node aggiorna_sentieri.js   (variabili d'ambiente: SITO, FORZA=1, ESITO, BLOCCHI=21,22 per provare con pochi blocchi)
  */
 "use strict";
 const fs = require("fs");
 const path = require("path");
 const QT = require("./core.js");
 
-// Stesse zone di Qui Parcheggi
-const ZONE = {
-  // Pavia con Travacò Siccomario e Villanova d'Ardenghi
-  "Pavia": [45.100, 9.010, 45.260, 9.215],
-  "Milano": [45.380, 9.030, 45.540, 9.290],
-  // Varese e Biandronno con i paesi in mezzo, il Campo dei Fiori e il lago di Varese
-  "Varese e Biandronno": [45.770, 8.675, 45.880, 8.890]
-};
-// Ogni zona si scarica allargata di 15 km per lato: così chi è dentro la zona trova tutto
-// anche col raggio più grande (15 km)
+// Lombardia (riquadro che la contiene) e quanto prendere oltre i confini
+const LOMBARDIA = [44.68, 8.50, 46.64, 11.43];
 const MARGINE_KM = 15;
-const PASSO = 0.1;          // lato della tessera in gradi (circa 11 × 8 km)
+const BLOCCO = 0.5;          // lato dei blocchi chiesti a Overpass, in gradi
+const PASSO = 0.1;           // lato delle tessere del sito, in gradi (circa 11 × 8 km)
+const METRI_TRA_PUNTI = 5;   // semplificazione della traccia
+const ORE_VALIDI = 6 * 24;   // i dati pubblicati da meno di 6 giorni non si riscaricano (salvo FORZA)
+// Da aumentare quando cambia il formato dei file: i dati pubblicati con un'altra versione si riscaricano subito
+const VERSIONE_DATI = 2;
 const CARTELLA = path.join(__dirname, "dati");
 const USER_AGENT = "Qui-Trekking/1.0 (https://github.com/paolo1957-it/Trekkiing)";
 const SERVER = [
@@ -38,7 +40,6 @@ const SERVER = [
 ];
 
 const attendi = (ms) => new Promise((r) => setTimeout(r, ms));
-const slug = (nome) => nome.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 function allarga([s, w, n, e]) {
   const dLat = MARGINE_KM / 111.32;
@@ -46,30 +47,46 @@ function allarga([s, w, n, e]) {
   return [s - dLat, w - dLon, n + dLat, e + dLon].map((x) => +x.toFixed(4));
 }
 
-async function scarica(query) {
+function blocchi([s, w, n, e]) {
+  const out = [];
+  for (let la = s; la < n; la += BLOCCO) {
+    for (let lo = w; lo < e; lo += BLOCCO) {
+      out.push([la, lo, Math.min(la + BLOCCO, n), Math.min(lo + BLOCCO, e)].map((x) => +x.toFixed(4)));
+    }
+  }
+  return out;
+}
+
+async function scarica(url, opz, ms) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  try {
+    const r = await fetch(url, { ...opz, headers: { "User-Agent": USER_AGENT, ...(opz && opz.headers) }, signal: ctrl.signal });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return r;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+async function daOverpass(query) {
   let ultimo;
   for (let giro = 0; giro < 3; giro++) {
     for (const url of SERVER) {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 6 * 60000);
       try {
-        const r = await fetch(url, {
+        const r = await scarica(url, {
           method: "POST",
-          headers: { "User-Agent": USER_AGENT, "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
-          body: "data=" + encodeURIComponent(query),
-          signal: ctrl.signal
-        });
-        if (!r.ok) throw new Error("HTTP " + r.status);
+          headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+          body: "data=" + encodeURIComponent(query)
+        }, 6 * 60000);
         const dati = await r.json();
         if (!Array.isArray(dati.elements)) throw new Error("risposta senza elementi");
         if (dati.remark && /error|timed out|out of memory|rate/i.test(dati.remark)) throw new Error(dati.remark);
         console.log(`  ok da ${url}: ${dati.elements.length} elementi`);
-        return dati;
+        return dati.elements;
       } catch (e) {
         ultimo = e;
         console.log(`  ${url}: ${e.message}`);
-      } finally {
-        clearTimeout(t);
       }
     }
     await attendi(60000 * (giro + 1));
@@ -77,68 +94,179 @@ async function scarica(query) {
   throw new Error("nessun server ha risposto: " + (ultimo && ultimo.message));
 }
 
+// Un sentiero che attraversa più blocchi arriva ritagliato in ogni blocco: la traccia di ogni via ha null nei
+// punti fuori dal blocco. Si uniscono le vie punto per punto, così la traccia torna intera.
+function unisciBlocchi(raccolta, elementi) {
+  for (const el of elementi) {
+    if (el.type === "relation") {
+      let r = raccolta.rel.get(el.id);
+      if (!r) { r = { tags: el.tags, membri: [] }; raccolta.rel.set(el.id, r); }
+      (el.members || []).forEach((m, i) => {
+        if (m.type !== "way") return;
+        const k = i + ":" + m.ref;
+        let v = r.membri.find((x) => x.k === k);
+        if (!v) { v = { k, type: "way", ref: m.ref, role: m.role, geometry: null }; r.membri.push(v); }
+        if (!m.geometry) return;
+        if (!v.geometry) v.geometry = m.geometry.slice();
+        else m.geometry.forEach((g, j) => { if (g && !v.geometry[j]) v.geometry[j] = g; });
+      });
+    } else {
+      const p = QT.compatta(el);
+      if (p) raccolta.punti.set(p.i, p);
+    }
+  }
+}
+
+// Tiene un punto ogni METRI_TRA_PUNTI metri (sempre il primo e l'ultimo)
+function semplifica(l) {
+  if (l.length < 3) return l;
+  const out = [l[0]];
+  for (let i = 1; i < l.length - 1; i++) {
+    const u = out[out.length - 1];
+    if (QT.distanza(u[0], u[1], l[i][0], l[i][1]) >= METRI_TRA_PUNTI) out.push(l[i]);
+  }
+  out.push(l[l.length - 1]);
+  return out;
+}
+
 const nomeTessera = (lat, lon) => `t_${Math.floor(lat / PASSO)}_${Math.floor(lon / PASSO)}.json`;
 
-// Ogni sentiero va in tutte le tessere che attraversa (l'app toglie i doppioni); ogni punto nella sua
-function inTessere(sentieri, punti) {
+function salva(raccolta, zona) {
   const tessere = new Map();
-  const prendi = (t) => { if (!tessere.has(t)) tessere.set(t, { s: [], p: [] }); return tessere.get(t); };
-  for (const s of sentieri) {
-    const nomi = new Set();
-    for (const l of s.g) for (const [la, lo] of l) nomi.add(nomeTessera(la, lo));
-    for (const t of nomi) prendi(t).s.push(s);
+  const prendi = (t) => { if (!tessere.has(t)) tessere.set(t, { s: [], r: {}, p: [] }); return tessere.get(t); };
+  let nSentieri = 0, puntiPrima = 0, puntiDopo = 0;
+  for (const [id, r] of raccolta.rel) {
+    const s = QT.compattaSentiero({ type: "relation", id, tags: r.tags, members: r.membri });
+    if (!s) continue;
+    for (const l of s.g) puntiPrima += l.length;
+    s.g = s.g.map(semplifica);
+    for (const l of s.g) puntiDopo += l.length;
+    const casa = nomeTessera(s.g[0][0][0], s.g[0][0][1]);
+    prendi(casa).s.push(s);
+    const attraversate = new Set();
+    for (const l of s.g) for (const [la, lo] of l) attraversate.add(nomeTessera(la, lo));
+    attraversate.delete(casa);
+    for (const t of attraversate) prendi(t).r[s.i] = casa;
+    nSentieri++;
   }
-  for (const p of punti) prendi(nomeTessera(p.la, p.lo)).p.push(p);
-  return tessere;
+  for (const p of raccolta.punti.values()) prendi(nomeTessera(p.la, p.lo)).p.push(p);
+  console.log(`Traccia semplificata: ${puntiPrima} → ${puntiDopo} punti`);
+
+  fs.rmSync(CARTELLA, { recursive: true, force: true });
+  fs.mkdirSync(CARTELLA, { recursive: true });
+  let byte = 0;
+  for (const [t, cont] of tessere) {
+    const testo = JSON.stringify(cont);
+    byte += testo.length;
+    fs.writeFileSync(path.join(CARTELLA, t), testo);
+  }
+  const indice = {
+    versioneDati: VERSIONE_DATI,
+    passo: PASSO,
+    zona: LOMBARDIA,        // dentro questo riquadro l'app usa i dati del sito
+    scaricata: zona,
+    aggiornato: new Date().toISOString().replace(/\.\d+Z$/, "Z"),
+    sentieri: nSentieri,
+    punti: raccolta.punti.size,
+    tessere: [...tessere.keys()].sort(),
+    fonte: "© OpenStreetMap contributors (ODbL)"
+  };
+  fs.writeFileSync(path.join(CARTELLA, "indice.json"), JSON.stringify(indice, null, 1));
+  console.log(`Salvati ${nSentieri} sentieri e ${raccolta.punti.size} punti in ${tessere.size} tessere (${(byte / 1048576).toFixed(1)} MB)`);
+}
+
+async function scaricaTutto() {
+  const zona = allarga(LOMBARDIA);
+  let lista = blocchi(zona);
+  // per provare: BLOCCHI=21,22 scarica solo quei blocchi
+  if (process.env.BLOCCHI) lista = process.env.BLOCCHI.split(",").map((i) => lista[+i]).filter(Boolean);
+  const raccolta = { rel: new Map(), punti: new Map() };
+  for (const [i, b] of lista.entries()) {
+    console.log(`Blocco ${i + 1} di ${lista.length}: ${b.join(", ")}`);
+    unisciBlocchi(raccolta, await daOverpass(QT.queryOverpass(b, 300)));
+  }
+  salva(raccolta, zona);
+}
+
+// ---------- Dati già pubblicati ----------
+async function indicePubblicato(sito) {
+  if (!sito) throw new Error("indirizzo del sito non indicato");
+  const base = sito.replace(/\/?$/, "/") + "dati/";
+  const r = await scarica(base + "indice.json", {}, 20000);
+  return { base, indice: await r.json() };
+}
+
+async function recuperaDalSito(sito) {
+  const { base, indice } = await indicePubblicato(sito);
+  if (indice.versioneDati !== VERSIONE_DATI) throw new Error("i dati pubblicati sono di un'altra versione");
+  console.log(`Ricopio i dati già pubblicati da ${base} (aggiornati ${indice.aggiornato}) …`);
+  fs.rmSync(CARTELLA, { recursive: true, force: true });
+  fs.mkdirSync(CARTELLA, { recursive: true });
+  const coda = indice.tessere.slice();
+  async function lavoratore() {
+    while (coda.length) {
+      const t = coda.shift();
+      let ok = false;
+      for (let i = 0; i < 3 && !ok; i++) {
+        try {
+          const r = await scarica(base + t, {}, 60000);
+          fs.writeFileSync(path.join(CARTELLA, t), Buffer.from(await r.arrayBuffer()));
+          ok = true;
+        } catch (e) {
+          console.log(`  ${t}: ${e.message}`);
+          await attendi(3000);
+        }
+      }
+      if (!ok) throw new Error(`tessera ${t} non recuperata`);
+    }
+  }
+  await Promise.all(Array.from({ length: 8 }, lavoratore));
+  fs.writeFileSync(path.join(CARTELLA, "indice.json"), JSON.stringify(indice, null, 1));
+  console.log(`  ricopiate ${indice.tessere.length} tessere`);
+}
+
+// Riga "stato;aggiornato;sentieri" per la notifica sull'iPhone:
+// nuovi = riscaricati, recenti = ricopiati perché non serviva riscaricarli, ripiego = Overpass non ha risposto
+function scriviEsito(stato) {
+  if (!process.env.ESITO) return;
+  let indice = {};
+  try { indice = JSON.parse(fs.readFileSync(path.join(CARTELLA, "indice.json"), "utf8")); } catch (e) { /* nessun indice */ }
+  fs.writeFileSync(process.env.ESITO, `${stato};${indice.aggiornato || ""};${indice.sentieri || ""}\n`);
 }
 
 async function main() {
-  fs.mkdirSync(CARTELLA, { recursive: true });
-  const fileIndice = path.join(CARTELLA, "indice.json");
-  let indice;
-  try { indice = JSON.parse(fs.readFileSync(fileIndice, "utf8")); } catch (e) { indice = { zone: {} }; }
-  indice.passo = PASSO;
-  // zone tolte da ZONE: via anche i loro file
-  for (const nome of Object.keys(indice.zone)) {
-    if (!ZONE[nome]) { fs.rmSync(path.join(CARTELLA, indice.zone[nome].cartella || slug(nome)), { recursive: true, force: true }); delete indice.zone[nome]; }
-  }
-
-  let errori = 0;
-  for (const [nome, bbox] of Object.entries(ZONE)) {
-    console.log(`${nome}…`);
-    const largo = allarga(bbox);
-    let dati;
+  const sito = process.env.SITO;
+  const forza = process.env.FORZA === "1" || process.env.FORZA === "true";
+  if (!forza) {
     try {
-      dati = await scarica(QT.queryOverpass(largo, 300));
+      const { indice } = await indicePubblicato(sito);
+      const ore = (Date.now() - Date.parse(indice.aggiornato)) / 3600000;
+      if (indice.versioneDati !== VERSIONE_DATI) {
+        console.log("I dati pubblicati sono di una versione precedente: li riscarico da Overpass.");
+      } else if (ore < ORE_VALIDI) {
+        console.log(`Dati pubblicati ${ore.toFixed(1)} ore fa: non serve riscaricarli.`);
+        await recuperaDalSito(sito);
+        scriviEsito("recenti");
+        return;
+      }
     } catch (e) {
-      console.log(`  ${nome} NON aggiornata, resta la versione precedente: ${e.message}`);
-      errori++;
-      continue;
+      console.log(`Dati pubblicati non disponibili (${e.message}): li scarico da Overpass.`);
     }
-    const { sentieri, punti } = QT.leggiRisposta(dati);
-    const tessere = inTessere(sentieri, punti);
-    const cartella = slug(nome);
-    fs.rmSync(path.join(CARTELLA, cartella), { recursive: true, force: true });
-    fs.mkdirSync(path.join(CARTELLA, cartella), { recursive: true });
-    for (const [t, cont] of tessere) fs.writeFileSync(path.join(CARTELLA, cartella, t), JSON.stringify(cont));
-    indice.zone[nome] = {
-      bbox,
-      scaricata: largo,
-      cartella,
-      aggiornato: new Date().toISOString().replace(/\.\d+Z$/, "Z"),
-      sentieri: sentieri.length,
-      punti: punti.length,
-      tessere: [...tessere.keys()].sort()
-    };
-    console.log(`  ${sentieri.length} sentieri e ${punti.length} punti in ${tessere.size} tessere`);
   }
-  indice.fonte = "© OpenStreetMap contributors (ODbL)";
-  fs.writeFileSync(fileIndice, JSON.stringify(indice, null, 1));
-  // Per la notifica sull'iPhone: riga "zone aggiornate;zone totali" (vedi .github/workflows/pubblica.yml)
-  const tot = Object.keys(ZONE).length;
-  if (process.env.ESITO) fs.writeFileSync(process.env.ESITO, `${tot - errori};${tot}\n`);
-  if (errori === tot) process.exitCode = 1;
+  try {
+    await scaricaTutto();
+    scriviEsito("nuovi");
+  } catch (e) {
+    console.log(`Overpass non disponibile: ${e.message}`);
+    try {
+      await recuperaDalSito(sito);
+      scriviEsito("ripiego");
+    } catch (e2) {
+      console.log(`Nessun dato disponibile: ${e2.message}. L'app userà Overpass direttamente.`);
+      process.exitCode = 1;
+    }
+  }
 }
 
 if (require.main === module) main();
-else module.exports = { ZONE, allarga, inTessere, slug };
+else module.exports = { LOMBARDIA, allarga, blocchi, unisciBlocchi, semplifica, salva };

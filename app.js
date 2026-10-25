@@ -244,7 +244,8 @@
     const servono = new Set(vicine.flatMap((c) => [...(c.s || []).map((x) => x.i), ...Object.keys(c.r || {})]));
     return {
       lat, lon, raggio,
-      sentieri: vicine.concat(lontane).flatMap((c) => c.s || []).filter((x) => servono.has(x.i)),
+      // filtro: una volta sola per sentiero (dopo un aggiornamento parziale può stare in due tessere)
+      sentieri: vicine.concat(lontane).flatMap((c) => c.s || []).filter((x) => servono.delete(x.i)),
       punti: vicine.flatMap((c) => c.p || []),
       quando: Date.parse(ind.aggiornato) || Date.now()
     };

@@ -14,7 +14,7 @@
  *   ne hanno solo il numero e la tessera di casa, e l'app la scarica quando serve;
  * - la traccia è semplificata: si tiene un punto ogni circa 5 metri.
  *
- * Uso: node aggiorna_sentieri.js   (variabili d'ambiente: SITO, FORZA=1, ESITO, BLOCCHI=21,22 per provare con pochi blocchi)
+ * Uso: node aggiorna_sentieri.js   (variabili d'ambiente: SITO, FORZA=1, ESITO, MINUTI_MAX=270, BLOCCHI=21,22 per provare con pochi blocchi)
  */
 "use strict";
 const fs = require("fs");
@@ -69,16 +69,19 @@ async function scarica(url, opz, ms) {
   }
 }
 
-async function daOverpass(query) {
+// Prova i server a turno (2 giri). Si ferma prima se si supera "scadenza" (ora limite in millisecondi).
+async function daOverpass(query, scadenza) {
   let ultimo;
-  for (let giro = 0; giro < 3; giro++) {
+  for (let giro = 0; giro < 2; giro++) {
     for (const url of SERVER) {
+      const resta = (scadenza || Infinity) - Date.now();
+      if (resta < 60000) throw new Error("tempo massimo superato");
       try {
         const r = await scarica(url, {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
           body: "data=" + encodeURIComponent(query)
-        }, 6 * 60000);
+        }, Math.min(4 * 60000, resta));
         const dati = await r.json();
         if (!Array.isArray(dati.elements)) throw new Error("risposta senza elementi");
         if (dati.remark && /error|timed out|out of memory|rate/i.test(dati.remark)) throw new Error(dati.remark);
@@ -89,7 +92,7 @@ async function daOverpass(query) {
         console.log(`  ${url}: ${e.message}`);
       }
     }
-    await attendi(60000 * (giro + 1));
+    if (giro === 0) await attendi(30000);
   }
   throw new Error("nessun server ha risposto: " + (ultimo && ultimo.message));
 }
@@ -171,21 +174,62 @@ function salva(raccolta, zona) {
     tessere: [...tessere.keys()].sort(),
     fonte: "© OpenStreetMap contributors (ODbL)"
   };
-  fs.writeFileSync(path.join(CARTELLA, "indice.json"), JSON.stringify(indice, null, 1));
+  scriviIndice(indice);
   console.log(`Salvati ${nSentieri} sentieri e ${raccolta.punti.size} punti in ${tessere.size} tessere (${(byte / 1048576).toFixed(1)} MB)`);
 }
 
+const scriviIndice = (indice) => fs.writeFileSync(path.join(CARTELLA, "indice.json"), JSON.stringify(indice, null, 1));
+
+// Scarica i blocchi uno dopo l'altro. Un blocco che non risponde viene saltato; superato il tempo massimo
+// (MINUTI_MAX) si saltano i rimanenti. Restituisce i blocchi mancanti.
 async function scaricaTutto() {
+  const scadenza = Date.now() + (+process.env.MINUTI_MAX || 270) * 60000;
   const zona = allarga(LOMBARDIA);
   let lista = blocchi(zona);
   // per provare: BLOCCHI=21,22 scarica solo quei blocchi
   if (process.env.BLOCCHI) lista = process.env.BLOCCHI.split(",").map((i) => lista[+i]).filter(Boolean);
   const raccolta = { rel: new Map(), punti: new Map() };
+  const falliti = [];
   for (const [i, b] of lista.entries()) {
     console.log(`Blocco ${i + 1} di ${lista.length}: ${b.join(", ")}`);
-    unisciBlocchi(raccolta, await daOverpass(QT.queryOverpass(b, 300)));
+    try {
+      unisciBlocchi(raccolta, await daOverpass(QT.queryOverpass(b, 180), scadenza));
+    } catch (e) {
+      console.log(`  blocco saltato: ${e.message}`);
+      falliti.push(b);
+    }
   }
+  if (falliti.length === lista.length) throw new Error("nessun blocco scaricato");
   salva(raccolta, zona);
+  if (falliti.length) console.log(`Blocchi mancanti: ${falliti.length} di ${lista.length}`);
+  return falliti;
+}
+
+// Per i blocchi non scaricati rimette le tessere della pubblicazione precedente (se c'è ed è della stessa versione)
+async function riempiBuchi(falliti, sito) {
+  const { base, indice: vecchio } = await indicePubblicato(sito);
+  if (vecchio.versioneDati !== VERSIONE_DATI) throw new Error("i dati pubblicati sono di un'altra versione");
+  const dentro = (t) => {
+    const [, i, j] = t.match(/^t_(-?\d+)_(-?\d+)\.json$/).map(Number);
+    const la = (i + 0.5) * PASSO, lo = (j + 0.5) * PASSO;
+    return falliti.some(([s, w, n, e]) => la >= s && la < n && lo >= w && lo < e);
+  };
+  const indice = JSON.parse(fs.readFileSync(path.join(CARTELLA, "indice.json"), "utf8"));
+  const tessere = new Set(indice.tessere);
+  let n = 0;
+  for (const t of vecchio.tessere.filter(dentro)) {
+    try {
+      const r = await scarica(base + t, {}, 60000);
+      fs.writeFileSync(path.join(CARTELLA, t), Buffer.from(await r.arrayBuffer()));
+      tessere.add(t);
+      n++;
+    } catch (e) {
+      console.log(`  ${t}: ${e.message}`);
+    }
+  }
+  indice.tessere = [...tessere].sort();
+  scriviIndice(indice);
+  console.log(`Rimesse ${n} tessere della pubblicazione del ${vecchio.aggiornato} nei blocchi mancanti`);
 }
 
 // ---------- Dati già pubblicati ----------
@@ -221,12 +265,13 @@ async function recuperaDalSito(sito) {
     }
   }
   await Promise.all(Array.from({ length: 8 }, lavoratore));
-  fs.writeFileSync(path.join(CARTELLA, "indice.json"), JSON.stringify(indice, null, 1));
+  scriviIndice(indice);
   console.log(`  ricopiate ${indice.tessere.length} tessere`);
 }
 
 // Riga "stato;aggiornato;sentieri" per la notifica sull'iPhone:
-// nuovi = riscaricati, recenti = ricopiati perché non serviva riscaricarli, ripiego = Overpass non ha risposto
+// nuovi = riscaricati, parziale = riscaricati in parte (alcuni blocchi non hanno risposto),
+// recenti = ricopiati perché non serviva riscaricarli, ripiego = Overpass non ha risposto
 function scriviEsito(stato) {
   if (!process.env.ESITO) return;
   let indice = {};
@@ -253,9 +298,9 @@ async function main() {
       console.log(`Dati pubblicati non disponibili (${e.message}): li scarico da Overpass.`);
     }
   }
+  let falliti;
   try {
-    await scaricaTutto();
-    scriviEsito("nuovi");
+    falliti = await scaricaTutto();
   } catch (e) {
     console.log(`Overpass non disponibile: ${e.message}`);
     try {
@@ -265,8 +310,17 @@ async function main() {
       console.log(`Nessun dato disponibile: ${e2.message}. L'app userà Overpass direttamente.`);
       process.exitCode = 1;
     }
+    return;
   }
+  if (falliti.length) {
+    try {
+      await riempiBuchi(falliti, sito);
+    } catch (e) {
+      console.log(`Blocchi mancanti lasciati vuoti (${e.message}): lì l'app userà Overpass direttamente.`);
+    }
+  }
+  scriviEsito(falliti.length ? "parziale" : "nuovi");
 }
 
 if (require.main === module) main();
-else module.exports = { LOMBARDIA, allarga, blocchi, unisciBlocchi, semplifica, salva };
+else module.exports = { LOMBARDIA, allarga, blocchi, unisciBlocchi, semplifica, salva, riempiBuchi };

@@ -35,7 +35,7 @@ jobs:
       # negli altri casi si ricopiano quelli già pubblicati. Se Overpass non risponde restano quelli vecchi.
       - name: Scarica i sentieri della Lombardia da OpenStreetMap
         id: dati
-        timeout-minutes: 150
+        timeout-minutes: 300   # lo script si ferma da solo dopo 270 minuti e salva quello che ha
         continue-on-error: true   # senza dati, l'app chiede i sentieri direttamente dal telefono
         env:
           SITO: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
@@ -51,7 +51,7 @@ jobs:
       - id: deploy
         uses: actions/deploy-pages@v5
 
-      # ✅ dati riscaricati · ❌ qualcosa è andato storto · ⚠️ Overpass non ha risposto e sono rimasti i dati vecchi
+      # ✅ dati riscaricati · ⚠️ in parte · ❌ qualcosa è andato storto · ⚠️ Overpass non ha risposto e sono rimasti i dati vecchi
       - name: Notifica sull'iPhone
         if: always() && env.NTFY_TOPIC != ''
         env:
@@ -76,6 +76,8 @@ jobs:
               msg = ("Aggiornamento fallito", "Tocca per vedere cosa è successo su GitHub.", "x", 4)
           elif stato == "nuovi":
               msg = ("Sentieri aggiornati", f"Riscaricati da OpenStreetMap: {n} sentieri in Lombardia.", "white_check_mark", 3)
+          elif stato == "parziale":
+              msg = ("Sentieri aggiornati in parte", f"{n} sentieri: alcune zone non hanno risposto e restano quelle vecchie.", "warning", 3)
           elif stato == "ripiego":
               msg = ("Sentieri non aggiornati", f"OpenStreetMap non ha risposto: il sito resta al {giorno}.", "warning", 4)
           if msg:

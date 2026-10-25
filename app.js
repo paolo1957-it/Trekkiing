@@ -178,7 +178,7 @@
 
   async function daOverpass(lat, lon, raggio) {
     const largo = Math.min(raggio * 1.25 + 1000, 20000);
-    const query = QT.queryOverpass(QT.riquadro(lat, lon, largo), 50);
+    const query = QT.queryOverpass(QT.riquadro(lat, lon, largo), 90);
     let ultimoErrore;
     for (const url of cfg.overpass || []) {
       try {
@@ -186,7 +186,7 @@
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: "data=" + encodeURIComponent(query)
-        }, 60000);
+        }, 100000);   // i server di Overpass a volte impiegano più di un minuto
         if (dati.remark && /error|runtime/i.test(dati.remark)) throw new Error(dati.remark);
         const { sentieri, punti } = QT.leggiRisposta(dati);
         return { lat, lon, raggio: largo, sentieri, punti, quando: Date.now() };
@@ -389,15 +389,22 @@
     return QT.estremita(s).sort((a, b) => QT.distanza(c.lat, c.lon, a[0], a[1]) - QT.distanza(c.lat, c.lon, b[0], b[1]))[0];
   }
 
+  // Sentiero ritagliato sulla zona ("parz"): senza i tag di OpenStreetMap, lunghezza, dislivello e tempo
+  // si possono calcolare solo per il tratto in zona, e lo si dice.
   function numeriSentiero(s, q) {
-    const su = s.su ?? (q && q.su), giu = s.giu ?? (q && q.giu);
-    const stima = s.su == null && q ? " <i>stima</i>" : "";
-    const caselle = [[QT.formattaKm(s.l), "lunghezza" + (s.anello ? " (ad anello)" : "")]];
+    const daTag = s.su != null;
+    const su = daTag ? s.su : q && q.su, giu = daTag ? s.giu : q && q.giu;
+    const zona = s.parz ? ", tratto in zona" : "";
+    const stima = !daTag && q ? " <i>stima" + zona + "</i>" : "";
+    const lung = s.parz && !s.lt ? ["≥ " + QT.formattaKm(s.l), "lunghezza (qui solo il tratto in zona)"]
+      : [QT.formattaKm(s.l), "lunghezza" + (s.anello ? " (ad anello)" : s.parz ? " totale" : "")];
+    const caselle = [lung];
     if (su != null) caselle.push([`↗ ${su} m`, "salita" + stima], [`↘ ${giu ?? "?"} m`, "discesa" + stima]);
     else caselle.push(["…", "dislivello: calcolo"]);
-    if (q && q.max != null) caselle.push([`${q.min}–${QT.formattaQuota(q.max)}`, "quota min–max"]);
-    const min = s.t || (su != null ? QT.tempoStimato(s.l, su, giu) : null);
-    if (min) caselle.push([QT.formattaOre(min), s.t ? "tempo indicato" : "tempo <i>stima</i>"]);
+    if (q && q.max != null) caselle.push([`${q.min}–${QT.formattaQuota(q.max)}`, "quota min–max" + zona]);
+    // con il dislivello stimato sul tratto in zona, anche il tempo vale per quel tratto
+    const min = s.t || (su != null ? QT.tempoStimato(daTag ? s.l : s.lv || s.l, su, giu) : null);
+    if (min) caselle.push([QT.formattaOre(min), s.t ? "tempo indicato" : "tempo <i>stima" + (daTag ? "" : zona) + "</i>"]);
     return caselle.map(([b, t]) => `<div><b>${b}</b><span>${t}</span></div>`).join("");
   }
 
@@ -442,7 +449,7 @@
   async function calcolaQuote(s) {
     if (quoteCalcolate.has(s.i)) return quoteCalcolate.get(s.i);
     const salvate = await Memoria.leggi("quote", s.i).catch(() => null);
-    if (salvate && salvate.l === s.l) { quoteCalcolate.set(s.i, salvate); return salvate; }
+    if (salvate && salvate.l === (s.lv || s.l)) { quoteCalcolate.set(s.i, salvate); return salvate; }
     const c = QT.campioni(s, 100);
     if (c.length < 2) return null;
     const url = cfg.quote + "?latitude=" + c.map((p) => p.la.toFixed(5)).join(",") + "&longitude=" + c.map((p) => p.lo.toFixed(5)).join(",");
@@ -452,7 +459,7 @@
     if (!d) return null;
     // per il disegno del profilo si usa solo il tratto più lungo (il primo)
     d.serie = quote.filter((h, i) => c[i].tratto === 0 && isFinite(h)).map((h) => Math.round(h));
-    d.l = s.l;
+    d.l = s.lv || s.l;
     quoteCalcolate.set(s.i, d);
     Memoria.salva("quote", s.i, d).catch(() => {});
     return d;

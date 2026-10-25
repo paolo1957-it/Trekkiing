@@ -172,26 +172,39 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
   // ---------- Sentieri (relazioni route=hiking) ----------
-  // Le vie di un sentiero non sono sempre in ordine: si uniscono in tratti continui unendo le estremità vicine.
+  // Le vie di un sentiero non sono sempre in ordine: si uniscono in tratti continui attaccando le vie che
+  // hanno un'estremità in comune (stesse coordinate). Con un indice delle estremità resta veloce anche per
+  // le alte vie con centinaia di pezzi.
   function unisciTratti(vie) {
-    const tratti = vie.filter((v) => v.length > 1).map((v) => v.slice());
-    const vicino = (a, b) => distanza(a[0], a[1], b[0], b[1]) < 25;
-    let cambiato = true;
-    while (cambiato) {
-      cambiato = false;
-      for (let i = 0; i < tratti.length && !cambiato; i++) {
-        for (let j = i + 1; j < tratti.length && !cambiato; j++) {
-          const a = tratti[i], b = tratti[j];
-          const ai = a[0], af = a[a.length - 1], bi = b[0], bf = b[b.length - 1];
-          let nuovo = null;
-          if (vicino(af, bi)) nuovo = a.concat(b.slice(1));
-          else if (vicino(af, bf)) nuovo = a.concat(b.slice(0, -1).reverse());
-          else if (vicino(ai, bf)) nuovo = b.concat(a.slice(1));
-          else if (vicino(ai, bi)) nuovo = b.slice().reverse().concat(a.slice(1));
-          if (nuovo) { tratti[i] = nuovo; tratti.splice(j, 1); cambiato = true; }
-        }
+    const pezzi = vie.filter((v) => v.length > 1);
+    const chiave = (p) => p[0] + "," + p[1];
+    const estremi = new Map();
+    pezzi.forEach((v, i) => {
+      for (const k of [chiave(v[0]), chiave(v[v.length - 1])]) {
+        if (!estremi.has(k)) estremi.set(k, []);
+        estremi.get(k).push(i);
       }
-    }
+    });
+    const usato = new Array(pezzi.length).fill(false);
+    // un pezzo libero che tocca il punto p, già girato in modo da partire da p
+    const seguente = (p) => {
+      for (const j of estremi.get(chiave(p)) || []) {
+        if (usato[j]) continue;
+        usato[j] = true;
+        const v = pezzi[j];
+        return chiave(v[0]) === chiave(p) ? v : v.slice().reverse();
+      }
+      return null;
+    };
+    const tratti = [];
+    pezzi.forEach((v, i) => {
+      if (usato[i]) return;
+      usato[i] = true;
+      let linea = v.slice(), n;
+      while ((n = seguente(linea[linea.length - 1]))) linea = linea.concat(n.slice(1));
+      while ((n = seguente(linea[0]))) linea = n.slice().reverse().concat(linea.slice(1));
+      tratti.push(linea);
+    });
     return tratti.sort((x, y) => lunghezzaLinea(y) - lunghezzaLinea(x));
   }
   function lunghezzaLinea(l) {
@@ -219,21 +232,39 @@
     return null;
   }
 
-  /** Sentiero compatto da una relazione Overpass "out tags geom". */
+  /**
+   * Sentiero compatto da una relazione Overpass "out geom(riquadro)": la traccia arriva ritagliata sulla zona
+   * (i punti fuori sono null), così le alte vie lunghe centinaia di km non pesano. Se è ritagliata, "parz" = 1:
+   * la lunghezza calcolata ("lv") è solo quella del tratto in zona.
+   */
   function compattaSentiero(el) {
     const t = el.tags || {};
     if (el.type !== "relation") return null;
-    const vie = (el.members || []).filter((m) => m.type === "way" && m.geometry && !/^(alternative|excursion|approach|connection|guidepost|platform)$/.test(m.role || ""))
-      .map((m) => m.geometry.filter(Boolean).map((g) => [+g.lat.toFixed(5), +g.lon.toFixed(5)]));
-    if (!vie.length) return null;
+    let parz = false;
+    const vie = [];
+    for (const m of el.members || []) {
+      if (m.type !== "way" || /^(alternative|excursion|approach|connection|guidepost|platform)$/.test(m.role || "")) continue;
+      if (!m.geometry) { parz = true; continue; }
+      let pezzo = [];
+      for (const g of m.geometry) {
+        if (!g) { parz = true; if (pezzo.length) vie.push(pezzo); pezzo = []; continue; }
+        pezzo.push([+g.lat.toFixed(5), +g.lon.toFixed(5)]);
+      }
+      if (pezzo.length) vie.push(pezzo);
+    }
     const tratti = unisciTratti(vie);
-    const lunghezzaCalcolata = tratti.reduce((s, l) => s + lunghezzaLinea(l), 0);
+    if (!tratti.length) return null;
+    const lunghezzaCalcolata = Math.round(tratti.reduce((s, l) => s + lunghezzaLinea(l), 0));
+    const daTag = metriDaTag(t.distance);
     const s = {
       i: "r" + el.id,
       g: tratti,
       d: difficolta(t),
-      l: Math.round(metriDaTag(t.distance) || lunghezzaCalcolata)
+      l: Math.round(daTag || lunghezzaCalcolata),
+      lv: lunghezzaCalcolata
     };
+    if (parz) s.parz = 1;
+    if (daTag) s.lt = 1;
     const metti = (chiave, v) => { v = String(v ?? "").trim(); if (v) s[chiave] = v; };
     metti("r", t.ref);
     metti("n", t.name || t["name:it"]);
@@ -479,8 +510,8 @@
   // Sentieri escursionistici (esclusi i grandi itinerari europei, lunghissimi) e punti utili, in un riquadro
   function queryOverpass(bbox, timeout) {
     const b = `(${bbox.join(",")})`;
-    return `[out:json][timeout:${timeout || 40}][maxsize:200000000];` +
-      `relation${b}[route=hiking][type=route][network!=iwn];out tags geom;` +
+    return `[out:json][timeout:${timeout || 90}][maxsize:200000000];` +
+      `relation${b}[route=hiking][type=route][network!=iwn];out geom${b};` +
       `(nwr${b}[tourism~"^(alpine_hut|wilderness_hut)$"];` +
       `nwr${b}[amenity=shelter][shelter_type~"^(basic_hut|lean_to|rock_shelter)$"];` +
       `node${b}[amenity=drinking_water];` +

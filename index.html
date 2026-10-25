@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Trekking</title>
+  <meta name="description" content="Sentieri CAI con difficoltà, lunghezza e dislivello, rifugi, bivacchi e fontanelle vicino a te, da OpenStreetMap">
+  <meta name="theme-color" content="#2d5a27">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="favicon-64.png" type="image/png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand" aria-label="Trekking">
+        <img class="logo" src="icon-192.png" alt="" width="54" height="54">
+        <span class="brand-name">Trekking</span>
+      </div>
+      <form class="cerca" id="form-cerca" role="search">
+        <label for="cerca-indirizzo" class="sr-only">Cerca un luogo</label>
+        <input id="cerca-indirizzo" type="search" placeholder="Cerca…" autocomplete="off" enterkeyhint="search">
+      </form>
+      <div class="carb" id="cat-box">
+        <button class="cat-btn" id="categoria" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="cat-menu">
+          <span class="sr-only">Cosa mostrare: </span><span id="categoria-testo">Cosa mostrare</span>
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="cat-menu" id="cat-menu" role="group" aria-label="Cosa mostrare: puoi sceglierne più di uno" hidden>
+          <p class="cat-titolo">Sentieri <small>(per difficoltà)</small></p>
+          <div id="cat-sentieri"></div>
+          <p class="cat-titolo">Punti</p>
+          <div id="cat-voci"></div>
+          <button class="cat-ok" id="cat-ok" type="button">Fatto</button>
+        </div>
+      </div>
+      <label class="raggio">
+        <span class="sr-only">Raggio</span>
+        <select id="raggio">
+          <option value="2000">2 km</option>
+          <option value="5000" selected>5 km</option>
+          <option value="10000">10 km</option>
+          <option value="15000">15 km</option>
+        </select>
+      </label>
+    </header>
+
+    <main class="corpo">
+      <div id="mappa" class="mappa" role="application" aria-label="Mappa dei sentieri, rifugi e fontanelle"></div>
+      <div class="filigrana" id="filigrana" aria-hidden="true"><span id="filigrana-testo">Versione</span></div>
+
+      <div class="fab-col">
+        <button class="fab" id="btn-centra" type="button" title="Torna alla mia posizione" aria-label="Torna alla mia posizione">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="currentColor"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+        </button>
+        <button class="fab fab-nero" id="btn-elenco" type="button" title="Elenco dei sentieri e dei punti vicini" aria-label="Apri l'elenco dei sentieri e dei punti vicini" aria-controls="pannello" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="4.5" cy="6" r="1.6" fill="currentColor"/><circle cx="4.5" cy="12" r="1.6" fill="currentColor"/><circle cx="4.5" cy="18" r="1.6" fill="currentColor"/></svg>
+          <span class="badge" id="badge-elenco" hidden></span>
+        </button>
+        <button class="fab" id="btn-aggiorna" type="button" title="Aggiorna" aria-label="Aggiorna i dati">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+
+      <div class="fab-azioni">
+        <button class="fab fab-rifugio" id="btn-rifugio" type="button" title="Il rifugio più vicino" aria-label="Mostra il rifugio più vicino, aperto se possibile">
+          <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><path d="M2.5 12.5 12 4l9.5 8.5-1.5 1.6L12 7 4 14.1Z" fill="currentColor"/><path d="M5.5 13.5 12 8l6.5 5.5V21h-4.5v-5h-4v5H5.5Z" fill="currentColor"/></svg>
+        </button>
+        <button class="fab fab-acqua" id="btn-acqua" type="button" title="La fontanella più vicina" aria-label="Mostra la fontanella più vicina">
+          <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><path d="M12 2.5C9 7 5.8 10.6 5.8 14.6a6.2 6.2 0 0 0 12.4 0C18.2 10.6 15 7 12 2.5Z" fill="currentColor"/></svg>
+        </button>
+      </div>
+    </main>
+
+    <section class="pannello" id="pannello" aria-label="Sentieri e punti vicini" hidden>
+      <header class="pannello-testa">
+        <h2>Vicino a te</h2>
+        <button class="btn-help" id="btn-guida" type="button" aria-label="Apri la guida all'app" aria-controls="guida" aria-expanded="false">HELP</button>
+        <button class="chiudi" id="btn-chiudi" type="button" aria-label="Chiudi l'elenco e torna alla mappa">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        </button>
+      </header>
+
+      <div class="pannello-corpo">
+        <div class="stato" id="stato" role="status" aria-live="polite">Cerco la tua posizione…</div>
+
+        <a class="emergenza" href="tel:112">Emergenza in montagna? <b>Chiama il 112</b> (soccorso alpino)</a>
+
+        <label class="auto" for="auto-refresh">
+          <span>AUTO-REFRESH</span>
+          <span class="occhio" id="occhio" hidden title="Schermo sempre acceso"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.2" fill="currentColor"/></svg></span>
+          <select id="auto-refresh">
+            <option value="0" selected>0 · spento</option>
+            <option value="30">30 s</option>
+            <option value="60">60 s</option>
+            <option value="120">120 s</option>
+          </select>
+        </label>
+
+        <label class="auto" for="suoni">
+          <span>SUONI</span>
+          <select id="suoni">
+            <option value="1" selected>Attivi</option>
+            <option value="0">Spenti</option>
+          </select>
+        </label>
+
+        <label class="auto" for="sfondo">
+          <span>MAPPA</span>
+          <select id="sfondo">
+            <option value="topo" selected>Topografica</option>
+            <option value="stradale">Stradale</option>
+            <option value="grande">Stradale, nomi grandi</option>
+            <option value="satellite">Satellite</option>
+          </select>
+        </label>
+
+        <label class="auto" for="lettura" id="riga-lettura">
+          <span>LETTURA VOCALE</span>
+          <select id="lettura">
+            <option value="1" selected>Attiva</option>
+            <option value="0">Spenta</option>
+          </select>
+        </label>
+
+        <div class="sommario" id="sommario">
+          <div class="kpi kpi-osm"><b id="k-n">–</b><span>sentieri<br>nel raggio</span></div>
+          <div class="kpi kpi-rif"><b id="k-rif">–</b><span>rifugi e<br>bivacchi</span></div>
+          <div class="kpi kpi-acqua"><b id="k-acqua">–</b><span>fontanella<br>più vicina</span></div>
+        </div>
+
+        <div class="filtri" role="group" aria-label="Ordine e filtri">
+          <button class="chip ordine" type="button" data-ordine="distanza" aria-pressed="true">Per distanza</button>
+          <button class="chip ordine" type="button" data-ordine="nome" aria-pressed="false">Per nome</button>
+          <button class="chip ordine" type="button" data-ordine="lunghezza" aria-pressed="false">Per lunghezza</button>
+          <span class="sep" aria-hidden="true"></span>
+          <button class="chip filtro" type="button" data-filtro="cai" aria-pressed="false">Solo sentieri CAI</button>
+          <button class="chip filtro" type="button" data-filtro="aperti" aria-pressed="false">Rifugi aperti ora</button>
+        </div>
+
+        <ol class="lista" id="lista"></ol>
+
+        <footer class="fonti">
+          Dati: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> e chi contribuisce
+          (licenza ODbL); mappa topografica © <a href="https://opentopomap.org" target="_blank" rel="noopener">OpenTopoMap</a> (CC-BY-SA);
+          quote del terreno da <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> (Copernicus DEM).
+          Le informazioni sono inserite da volontari e possono essere incomplete o non aggiornate: prima di partire controlla
+          meteo, stato dei sentieri e apertura dei rifugi. Se trovi un errore puoi correggerlo su OpenStreetMap.
+        </footer>
+      </div>
+    </section>
+
+    <section class="pannello guida" id="guida" aria-label="Guida all'app" hidden>
+      <header class="pannello-testa">
+        <h2>Guida</h2>
+        <button class="chiudi" id="btn-chiudi-guida" type="button" aria-label="Chiudi la guida e torna alla mappa">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        </button>
+      </header>
+
+      <div class="pannello-corpo guida-corpo">
+        <p class="g-intro"><b>Trekking</b> ti mostra i sentieri vicino a te, colorati secondo la difficoltà CAI, con numero, segnavia,
+          lunghezza e dislivello, e poi rifugi, bivacchi e fontanelle. I dati vengono da OpenStreetMap, la mappa libera fatta da volontari.</p>
+        <p class="g-avviso">In emergenza chiama il <a href="tel:112">112</a>: attiva il Soccorso alpino. Prima di partire controlla meteo e stato del sentiero.</p>
+        <p class="g-versione" id="guida-versione"></p>
+
+        <nav class="g-indice" aria-label="Argomenti">
+          <a href="#g-difficolta">Difficoltà</a><a href="#g-mappa">Segnaposto</a><a href="#g-pulsanti">Pulsanti</a>
+          <a href="#g-elenco">Elenco e impostazioni</a><a href="#g-dati">I dati</a><a href="#g-consigli">Consigli</a>
+        </nav>
+
+        <section id="g-difficolta">
+          <h3>Sentieri e difficoltà</h3>
+          <p>Ogni sentiero è una linea colorata secondo la scala di difficoltà del CAI. Ingrandendo la mappa compare il
+            <b>segnavia</b> con il numero del sentiero, come quello dipinto su sassi e alberi.</p>
+          <ul class="g-lista" id="g-diff"></ul>
+          <p>Tocca la linea o il segnavia per aprire la <b>scheda del sentiero</b>: difficoltà, lunghezza, dislivello in salita e in discesa,
+            quota minima e massima, tempo di percorrenza, partenza e arrivo. Il sentiero scelto viene evidenziato sulla mappa.
+            <b>Portami all'attacco</b> apre il navigatore verso l'estremità del sentiero più vicina a te.</p>
+          <p>Il <b>dislivello</b> e il <b>tempo</b> sono quelli scritti su OpenStreetMap; quando mancano l'app li calcola
+            dalle quote del terreno (indicati come <i>stima</i>). Il tempo stimato è per un escursionista medio, senza soste.</p>
+        </section>
+
+        <section id="g-mappa">
+          <h3>I segnaposto sulla mappa</h3>
+          <ul class="g-lista" id="g-legenda"></ul>
+          <ul class="g-lista">
+            <li><span class="g-segno"><span class="mk tipo-R aperto"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M2.5 12.5 12 4l9.5 8.5-1.5 1.6L12 7 4 14.1Z" fill="currentColor"/><path d="M5.5 13.5 12 8l6.5 5.5V21h-4.5v-5h-4v5H5.5Z" fill="currentColor"/></svg></span></span><div><b>Pallino verde</b>: rifugio aperto adesso (o in questa stagione), secondo gli orari su OpenStreetMap.</div></li>
+            <li><span class="g-segno"><span class="mk tipo-R chiuso"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M2.5 12.5 12 4l9.5 8.5-1.5 1.6L12 7 4 14.1Z" fill="currentColor"/><path d="M5.5 13.5 12 8l6.5 5.5V21h-4.5v-5h-4v5H5.5Z" fill="currentColor"/></svg></span></span><div><b>Più chiaro, con pallino rosso</b>: chiuso adesso.</div></li>
+            <li><span class="g-segno"><span class="io"></span></span><div><b>Punto azzurro</b>: sei tu. Il <b>cerchio tratteggiato</b> è il raggio di ricerca.</div></li>
+          </ul>
+          <p>Tocca un segnaposto per aprire il <b>riquadro</b>: nome, quota, gestore, posti letto, orari, telefono, sito e distanza.
+            Nella scheda di una <b>fontanella</b> o di una <b>sorgente</b> puoi scattare una foto: resta salvata solo sul tuo telefono.</p>
+        </section>
+
+        <section id="g-pulsanti">
+          <h3>I pulsanti</h3>
+          <ul class="g-lista">
+            <li><span class="g-segno"><span class="g-barra">Cerca un luogo…</span></span><div><b>Cerca</b>: scrivi un paese, una valle o un rifugio per vedere i sentieri lì invece che intorno a te.</div></li>
+            <li><span class="g-segno"><span class="g-barra corto">6 tipi</span></span><div><b>Cosa mostrare</b>: spunta le difficoltà dei sentieri e i tipi di punti che vuoi vedere, anche più di uno insieme. All'inizio sono scelti tutti tranne le <b>sorgenti</b>, che spesso non sono potabili.</div></li>
+            <li><span class="g-segno"><span class="g-barra corto">5 km</span></span><div><b>Raggio</b>: quanto lontano cercare, da 2 a 15 km. Con un raggio grande in montagna i sentieri sono tanti e lo scaricamento è più lento.</div></li>
+            <li><span class="g-segno"><span class="g-fab"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="currentColor"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="2"/></svg></span></span><div><b>Posizione</b>: riporta la mappa su di te e la fa seguire mentre ti sposti.</div></li>
+            <li><span class="g-segno"><span class="g-fab nero"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="4.5" cy="6" r="1.6" fill="currentColor"/><circle cx="4.5" cy="12" r="1.6" fill="currentColor"/><circle cx="4.5" cy="18" r="1.6" fill="currentColor"/></svg></span></span><div><b>Elenco</b>: apre la pagina con tutti i sentieri e i punti vicini e le impostazioni.</div></li>
+            <li><span class="g-segno"><span class="g-fab"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><div><b>Aggiorna</b>: riscarica subito i dati da OpenStreetMap.</div></li>
+            <li><span class="g-segno"><span class="btn-help g-help">HELP</span></span><div><b>HELP</b> (in alto nella pagina Elenco, accanto alla X): apre questa pagina.</div></li>
+            <li><span class="g-segno"><span class="g-fab rifugio"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M2.5 12.5 12 4l9.5 8.5-1.5 1.6L12 7 4 14.1Z" fill="currentColor"/><path d="M5.5 13.5 12 8l6.5 5.5V21h-4.5v-5h-4v5H5.5Z" fill="currentColor"/></svg></span></span><div><b>Rifugio</b>: porta la mappa sul rifugio più vicino aperto; se nessuno risulta aperto, sul più vicino.</div></li>
+            <li><span class="g-segno"><span class="g-fab acqua"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 2.5C9 7 5.8 10.6 5.8 14.6a6.2 6.2 0 0 0 12.4 0C18.2 10.6 15 7 12 2.5Z" fill="currentColor"/></svg></span></span><div><b>Fontanella</b>: porta la mappa sulla fontanella di acqua potabile più vicina.</div></li>
+          </ul>
+          <p>Per ingrandire o rimpicciolire la mappa usa due dita.</p>
+        </section>
+
+        <section id="g-elenco">
+          <h3>La pagina Elenco e le impostazioni</h3>
+          <p>In alto una riga dice cosa sta facendo l'app e quando sono stati scaricati i dati.</p>
+          <dl class="g-def">
+            <dt>AUTO-REFRESH</dt>
+            <dd>Ogni 30, 60 o 120 secondi l'app torna sulla tua posizione e ricalcola sentieri e punti vicini. <b>0</b> la spegne (all'inizio è spenta, per risparmiare batteria).
+              Finché è attivo, il telefono non va in standby e lo schermo resta acceso (al centro della riga compare l'<b>occhio verde</b>).</dd>
+            <dt>SUONI</dt>
+            <dd>Un <b>bing</b> a ogni aggiornamento; <b>due note che scendono</b> se i dati non si possono scaricare.</dd>
+            <dt>MAPPA</dt>
+            <dd><b>Topografica</b> mostra curve di livello, cime e sentieri (OpenTopoMap); <b>Stradale</b> la cartina di OpenStreetMap, anche con i <b>nomi grandi</b>; <b>Satellite</b> le foto aeree.</dd>
+            <dt>LETTURA VOCALE</dt>
+            <dd>Quando tocchi un sentiero o un segnaposto, l'app legge ad alta voce nome, difficoltà, lunghezza e distanza.</dd>
+          </dl>
+          <p>Sotto trovi quanti sentieri ci sono nel raggio, quanti rifugi e bivacchi e quanto dista la fontanella più vicina,
+            poi l'<b>elenco</b> ordinato <b>per distanza</b>, <b>per nome</b> o <b>per lunghezza</b>. <b>Solo sentieri CAI</b> nasconde
+            i sentieri non gestiti dal CAI; <b>Rifugi aperti ora</b> nasconde i punti che non risultano aperti. Tocca una riga per vederla sulla mappa.</p>
+          <p>Le scelte restano memorizzate sul telefono.</p>
+        </section>
+
+        <section id="g-dati">
+          <h3>Da dove vengono i dati</h3>
+          <ul class="g-punti">
+            <li>Sentieri, rifugi e fontanelle vengono da <b>OpenStreetMap</b>: l'app li chiede ogni volta per la zona intorno a te.
+              Gli ultimi dati scaricati restano sul telefono: se in montagna non c'è campo, l'app usa quelli.</li>
+            <li>La <b>difficoltà</b> è quella indicata dal CAI (tag <i>cai_scale</i>); se manca si usa la scala svizzera convertita. Se non c'è nessuna delle due il sentiero è grigio.</li>
+            <li>Il <b>segnavia</b> è quello descritto su OpenStreetMap (tag <i>osmc:symbol</i>); per i sentieri CAI senza descrizione si mostra il classico bianco e rosso.</li>
+            <li>Le <b>quote</b> per il dislivello stimato vengono dal modello del terreno Copernicus (precisione di circa 30 metri, tramite Open-Meteo): il risultato è indicativo.</li>
+            <li>Gli <b>orari dei rifugi</b> sono quelli inseriti dai volontari e spesso mancano: telefona prima, soprattutto per dormire.</li>
+            <li>Se trovi un errore puoi correggerlo tu su openstreetmap.org.</li>
+          </ul>
+        </section>
+
+        <section id="g-consigli">
+          <h3>Consigli</h3>
+          <ul class="g-punti">
+            <li>In <b>emergenza</b> chiama il <b>112</b>. Se puoi, installa anche l'app <b>GeoResQ</b> del CAI e del Soccorso alpino.</li>
+            <li>Scegli sentieri adatti alla tua preparazione e controlla il <b>meteo</b> prima di partire.</li>
+            <li>Non bere l'acqua delle <b>sorgenti</b> se non è indicata come potabile.</li>
+            <li>Su iPhone: in Safari tocca <b>Condividi → Aggiungi alla schermata Home</b> per usarla come un'app.</li>
+            <li>Apri l'app <b>prima di partire</b>, quando hai ancora campo: i dati restano salvati sul telefono.</li>
+            <li>Al primo avvio consenti l'accesso alla <b>posizione</b>. Tocca la mappa una volta per abilitare suoni e voce.</li>
+            <li>Il numero di <b>versione</b> scritto sulla mappa ti dice se hai l'ultimo aggiornamento.</li>
+          </ul>
+        </section>
+      </div>
+    </section>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="config.js?v=1"></script>
+  <script src="core.js?v=1"></script>
+  <script src="app.js?v=1"></script>
+</body>
+</html>

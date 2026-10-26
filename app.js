@@ -10,11 +10,11 @@
   const leggiPref = (k, def) => { try { const v = localStorage.getItem(PREF + k); return v === null ? def : v; } catch (e) { return def; } };
   const salvaPref = (k, v) => { try { localStorage.setItem(PREF + k, String(v)); } catch (e) { /* ignora */ } };
 
-  const RAGGI = [2000, 5000, 10000, 15000];
+  const RAGGI = [2000, 5000, 10000, 15000, 25000];
   const stato = {
     gps: null,          // ultima posizione GPS {lat, lon, acc}
     centro: null,       // punto della ricerca {lat, lon, daGps}
-    raggio: +leggiPref("raggio", cfg.raggioMetri || 5000),
+    raggio: +leggiPref("raggio", cfg.raggioMetri || 15000),
     categorie: null,    // Set di cosa mostrare: "D" + difficoltà per i sentieri, codice del tipo per i punti
     ordine: leggiPref("ordine", "distanza"),
     sentieri: [],       // sentieri scaricati intorno al centro
@@ -25,7 +25,7 @@
     caricando: false,
     seguiGps: true
   };
-  if (!RAGGI.includes(stato.raggio)) stato.raggio = 5000;
+  if (!RAGGI.includes(stato.raggio)) stato.raggio = 15000;
   const CHIAVI_DIFF = QT.ORDINE_DIFF.map((d) => "D" + d);
   const CATEGORIE_INIZIO = cfg.categorie || CHIAVI_DIFF.concat(["R", "B", "W"]);
   {
@@ -177,7 +177,7 @@
   const copre = (u, lat, lon, raggio) => u && QT.distanza(lat, lon, u.lat, u.lon) + raggio <= u.raggio;
 
   async function daOverpass(lat, lon, raggio) {
-    const largo = Math.min(raggio * 1.25 + 1000, 20000);
+    const largo = Math.min(raggio * 1.25 + 1000, 33000);
     const query = QT.queryOverpass(QT.riquadro(lat, lon, largo), 90);
     let ultimoErrore;
     for (const url of cfg.overpass || []) {

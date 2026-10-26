@@ -3,10 +3,10 @@
  */
 window.QT_CONFIG = {
   // Versione dell'app, mostrata in diagonale sulla mappa. Aumentala a ogni aggiornamento.
-  versione: "5",
+  versione: "6",
 
   // Raggio di ricerca iniziale in metri (modificabile anche dall'app)
-  raggioMetri: 5000,
+  raggioMetri: 15000,
 
   // Ricentra e ricalcola quando ti sposti di più di questi metri
   ricaricaDopoMetri: 500,

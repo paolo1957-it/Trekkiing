@@ -20,7 +20,7 @@ Web app per il telefono che mostra i **sentieri** vicino a te, con lo stesso asp
   a blocchi di mezzo grado (35 richieste), unisce i pezzi dei sentieri tagliati tra un blocco e l'altro e li salva nella
   cartella `dati/` del sito, divisi in tessere da 0,1°. Ogni sentiero è salvato una volta sola (nella tessera dove inizia;
   le altre tessere che attraversa dicono dov'è) e la traccia tiene un punto ogni circa 5 metri.
-  In Lombardia l'app legge da lì; fuori interroga i server pubblici di Overpass (2–15 km intorno a te).
+  In Lombardia l'app legge da lì; fuori interroga i server pubblici di Overpass (2–25 km intorno a te, di solito 15).
 - Come in Qui-Pets i dati **non** stanno nel repository, solo nel sito pubblicato: a ogni altra pubblicazione,
   o se Overpass non risponde, si ricopiano quelli già pubblicati. Per riscaricarli subito: Actions →
   *Pubblica sito e aggiorna sentieri* → *Run workflow*.

@@ -963,6 +963,14 @@
     $("btn-elenco").setAttribute("aria-expanded", "false");
     $("btn-elenco").focus();
   }
+  // Condividi su WhatsApp: messaggio già scritto con il link all'app (?ref=whatsapp per GoatCounter)
+  const linkApp = location.origin + location.pathname + "?ref=whatsapp";
+  $("btn-condividi").href = "https://wa.me/?text=" + encodeURIComponent(
+    "Ti consiglio Trekking: trovi sentieri CAI con difficoltà, lunghezza e dislivello, rifugi e fontanelle vicino a te. " +
+    "Gratis e senza registrazione: " + linkApp);
+  $("btn-condividi").addEventListener("click", () => {
+    if (window.goatcounter && window.goatcounter.count) window.goatcounter.count({ path: "condividi-whatsapp", title: "Condividi su WhatsApp", event: true });
+  });
   $("btn-elenco").addEventListener("click", apriElenco);
   $("btn-chiudi").addEventListener("click", chiudiElenco);
 
@@ -1105,17 +1113,8 @@
   // Ogni minuto ricalcola chi è aperto (se non stai guardando un riquadro)
   setInterval(() => { if (stato.centro && !stato.caricando && !document.hidden && $("pannello").hidden && !mappa._popup) ricalcola(); }, 60000);
 
-  // Numero di versione lungo la diagonale della mappa
-  $("filigrana-testo").textContent = "Versione " + (cfg.versione || "");
-  function posizionaFiligrana() {
-    const f = $("filigrana"), w = f.clientWidth, h = f.clientHeight;
-    if (!w || !h) return;
-    const diag = Math.hypot(w, h);
-    f.style.setProperty("--fil-ang", (Math.atan2(h, w) * 180 / Math.PI).toFixed(1) + "deg");
-    f.style.setProperty("--fil-size", Math.round(diag / 10.5) + "px");
-  }
-  posizionaFiligrana();
-  window.addEventListener("resize", posizionaFiligrana);
+  // Numero di versione nell'ultima riga della pagina Elenco
+  $("elenco-versione").textContent = "Versione " + (cfg.versione || "");
 
   avviaGps();
 

@@ -31,6 +31,8 @@ Web app per il telefono che mostra i **sentieri** vicino a te, con lo stesso asp
 - Pulsanti in basso: **rifugio** più vicino (aperto, se gli orari lo dicono) e **fontanella** più vicina.
 - Mappe: topografica (OpenTopoMap, predefinita), stradale, stradale con nomi grandi, satellite.
 - Nell'elenco c'è il pulsante per chiamare il **112** (soccorso alpino).
+- Statistiche d'uso anonime, senza cookie, con [GoatCounter](https://www.goatcounter.com): si vedono su
+  https://trekking.goatcounter.com (stesso login delle altre app).
 
 ## Pubblicazione
 

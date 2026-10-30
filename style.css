@@ -541,3 +541,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .pop .pop-whatsapp:hover { background: #18773f; }
 .scheda-corpo .pop-pulsanti { flex-wrap: wrap; }
 .scheda-corpo .pop-pulsanti .pop-vai { flex: 1 1 140px; }
+.pop-streetview { margin-top: 14px; padding: 10px 12px 12px; border-radius: 12px; background: var(--bg); }
+.pop-streetview > b { font: 700 13px var(--font-body); color: var(--testo-2); text-transform: uppercase; letter-spacing: .04em; }
+.pop-streetview .pop-pulsanti { margin-top: 8px; flex-wrap: wrap; }
+.pop .pop-sv { display: flex; align-items: center; justify-content: center; gap: 6px; flex: 1 1 140px; margin-top: 0; font-size: 17px; background: #f4b400; color: #1c1c1c; }

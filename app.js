@@ -530,12 +530,33 @@
     righe.push('<p class="fonte">Fonte: OpenStreetMap' + (s.su == null ? "; quote: Copernicus DEM (Open-Meteo)" : "") + "</p>");
     const a = attacco(s);
     const pulsanti = [`<a class="pop-vai" href="${linkNavigazione(a[0], a[1])}" target="_blank" rel="noopener">Portami all'attacco</a>`, BOTTONE_MAPPA];
+    const sv = streetView(s);
     const invia = `<a class="pop-vai pop-whatsapp" href="${attr(linkWhatsApp(s))}" target="_blank" rel="noopener">${ICONA_WA}Invia a un amico con WhatsApp</a>`;
     const waymarked = `<a class="pop-link" href="https://hiking.waymarkedtrails.org/#route?id=${attr(s.i.slice(1))}" target="_blank" rel="noopener">Profilo e dettagli su Waymarked Trails</a>`;
     const testa = `<div class="pop-testa">${segnavia(s, 30)}<h3>${esc(tit)}</h3></div>`;
     return `<div class="pop pop-sentiero" data-voce="${attr(voce.join(" "))}" data-sentiero="${attr(s.i)}">${testa}${righe.join("")}
-      <div class="pop-pulsanti">${pulsanti.join("")}</div>${invia}${waymarked}</div>`;
+      <div class="pop-pulsanti">${pulsanti.join("")}</div>${sv}${invia}${waymarked}</div>`;
   }
+
+  // Street View di Google Maps ai due estremi del sentiero (i più lontani tra loro); per un anello uno solo.
+  // Google Maps cerca la foto sferica più vicina al punto: in montagna spesso è quella di un escursionista.
+  const linkStreetView = (p) => `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${p[0]},${p[1]}`;
+  function streetView(s) {
+    const e = QT.estremita(s);
+    let a = e[0], b = e[e.length - 1], max = -1;
+    for (let i = 0; i < e.length; i++) for (let j = i + 1; j < e.length; j++) {
+      const d = QT.distanza(e[i][0], e[i][1], e[j][0], e[j][1]);
+      if (d > max) { max = d; a = e[i]; b = e[j]; }
+    }
+    // l'estremo indicato come partenza su OpenStreetMap non si conosce: si mette prima quello più vicino a te
+    const c = stato.gps || stato.centro;
+    if (c && QT.distanza(c.lat, c.lon, b[0], b[1]) < QT.distanza(c.lat, c.lon, a[0], a[1])) [a, b] = [b, a];
+    const vai = (p, testo) => `<a class="pop-vai pop-sv" href="${attr(linkStreetView(p))}" target="_blank" rel="noopener">${ICONA_SV}${esc(testo)}</a>`;
+    const due = max > 150;
+    return `<div class="pop-streetview"><b>Street View agli estremi</b><div class="pop-pulsanti">` +
+      (due ? vai(a, "Estremo più vicino") + vai(b, "Altro estremo") : vai(a, s.anello ? "Partenza e arrivo" : "Estremo")) + `</div></div>`;
+  }
+  const ICONA_SV = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="5" r="2.6" fill="currentColor"/><path d="M9.5 9h5l.8 6h-1.8l-.5 5h-2l-.5-5H8.7Z" fill="currentColor"/><ellipse cx="12" cy="20.5" rx="8" ry="2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
 
   // Link che apre Trekking con la stessa mappa, le stesse impostazioni e la scheda di questo sentiero
   const ICONA_WA = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 3a9 9 0 0 0-7.8 13.5L3 21l4.6-1.2A9 9 0 1 0 12 3Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8.6 8.4c.2-.5.5-.5.8-.5h.5c.2 0 .4 0 .5.4l.7 1.6c.1.2 0 .4-.1.6l-.5.6c-.1.1-.2.3 0 .5.6 1 1.4 1.8 2.4 2.4.2.1.4.1.5 0l.6-.7c.2-.2.4-.2.6-.1l1.6.7c.3.1.4.3.4.5v.5c0 .3-.1.7-.6.9-.5.3-1.4.5-2.6.1a9 9 0 0 1-4.6-4.3c-.6-1.2-.4-2.2-.2-2.7Z" fill="currentColor"/></svg>';

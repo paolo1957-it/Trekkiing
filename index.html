@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="style.css?v=10">
+  <link rel="stylesheet" href="style.css?v=11">
 </head>
 <body>
   <div class="app">
@@ -203,6 +203,9 @@
             inquadra il <b>sentiero intero</b> e lo evidenzia: chiudendo la scheda (X o <b>Vedi sulla mappa</b>) lo trovi lì; tocca un punto
             vuoto della mappa per togliere l'evidenziato.
             <b>Portami all'attacco</b> apre il navigatore verso l'estremità del sentiero più vicina a te.</p>
+          <p><b>Street View agli estremi</b>: due pulsanti aprono Google Maps con la foto sferica più vicina a ciascuna estremità
+            del sentiero, da girare col dito. In montagna spesso non c'è la macchina di Google: si vede la foto sferica di un escursionista
+            o quella della strada più vicina.</p>
           <p><b>Invia a un amico con WhatsApp</b> manda un link: chi lo apre vede Trekking con la stessa mappa, lo stesso raggio,
             le stesse scelte di cosa mostrare e la scheda dello stesso sentiero.</p>
           <p>Il <b>dislivello</b> e il <b>tempo</b> sono quelli scritti su OpenStreetMap; quando mancano l'app li calcola
@@ -292,9 +295,9 @@
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="config.js?v=10"></script>
+  <script src="config.js?v=11"></script>
   <script src="core.js?v=10"></script>
-  <script src="app.js?v=10"></script>
+  <script src="app.js?v=11"></script>
 
   <!-- Statistiche d'uso anonime, senza cookie: https://trekking.goatcounter.com -->
   <script data-goatcounter="https://trekking.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>

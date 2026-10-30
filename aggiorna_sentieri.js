@@ -172,7 +172,10 @@ function salva(raccolta, zona) {
     sentieri: nSentieri,
     punti: raccolta.punti.size,
     tessere: [...tessere.keys()].sort(),
-    fonte: "© OpenStreetMap contributors (ODbL)"
+    fonte: "© OpenStreetMap contributors (ODbL)",
+    licenza: "Open Database License (ODbL) 1.0",
+    licenzaUrl: "https://opendatacommons.org/licenses/odbl/1-0/",
+    generatoDa: "https://github.com/paolo1957-it/Trekkiing"
   };
   scriviIndice(indice);
   console.log(`Salvati ${nSentieri} sentieri e ${raccolta.punti.size} punti in ${tessere.size} tessere (${(byte / 1048576).toFixed(1)} MB)`);

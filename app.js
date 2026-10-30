@@ -34,6 +34,28 @@
   }
   if (!["distanza", "nome", "lunghezza"].includes(stato.ordine)) stato.ordine = "distanza";
 
+  // ---------- Link condiviso su WhatsApp ----------
+  // ?s=sentiero&c=centro della ricerca&v=vista della mappa (lat,lon,zoom)&r=raggio&k=cosa mostrare&f=filtri&o=ordine&b=mappa
+  // Chi lo apre vede la stessa mappa con la scheda dello stesso sentiero. Le scelte del link non si salvano sul telefono.
+  const link = (() => {
+    const q = new URLSearchParams(location.search);
+    const numeri = (x, n) => { const v = String(x || "").split(",").map(Number); return v.length === n && v.every(isFinite) ? v : null; };
+    const c = numeri(q.get("c"), 2), v = numeri(q.get("v"), 3);
+    if (!c && !v && !q.get("s")) return null;
+    return {
+      sentiero: q.get("s"), centro: c, vista: v, raggio: +q.get("r"), sfondo: q.get("b"),
+      categorie: q.has("k") ? q.get("k").split(",") : null, filtri: q.get("f"), ordine: q.get("o")
+    };
+  })();
+  if (link) {
+    if (RAGGI.includes(link.raggio)) stato.raggio = link.raggio;
+    if (link.categorie) stato.categorie = new Set(link.categorie.filter((k) => QT.TIPI[k] || CHIAVI_DIFF.includes(k)));
+    if (link.filtri) link.filtri.split(",").filter((f) => f === "cai" || f === "aperti").forEach((f) => stato.filtri.add(f));
+    if (["distanza", "nome", "lunghezza"].includes(link.ordine)) stato.ordine = link.ordine;
+    // l'indirizzo torna pulito: ricaricando la pagina si riparte dall'ultima posizione
+    try { history.replaceState(null, "", location.pathname); } catch (e) { /* ignora */ }
+  }
+
   // ---------- Mappa ----------
   const mappa = L.map("mappa", { zoomControl: false, attributionControl: true, preferCanvas: false })
     .setView([45.9, 10.5], 7);
@@ -58,31 +80,39 @@
       L.tileLayer(ESRI + "Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19 })
     ])
   };
-  let sfondoAttivo = leggiPref("sfondo", "topo");
+  let sfondoAttivo = link && sfondi[link.sfondo] ? link.sfondo : leggiPref("sfondo", "topo");
   if (!sfondi[sfondoAttivo]) sfondoAttivo = "topo";
-  function impostaSfondo(nome) {
+  function impostaSfondo(nome, salva) {
     Object.values(sfondi).forEach((l) => mappa.removeLayer(l));
     sfondoAttivo = sfondi[nome] ? nome : "topo";
     sfondi[sfondoAttivo].addTo(mappa);
     // la topografica arriva solo al 17: oltre si ingrandiscono le sue tessere
     mappa.setMaxZoom(19);
     $("mappa").classList.toggle("satellite", sfondoAttivo === "satellite");
-    salvaPref("sfondo", sfondoAttivo);
+    if (salva !== false) salvaPref("sfondo", sfondoAttivo);
   }
   sfondi.topo.options.maxNativeZoom = 17;
   sfondi.topo.options.maxZoom = 19;
-  impostaSfondo(sfondoAttivo);
+  impostaSfondo(sfondoAttivo, !link);
 
   const livelli = {
     raggio: L.layerGroup().addTo(mappa),
     sentieri: L.layerGroup().addTo(mappa),
     etichette: L.layerGroup().addTo(mappa),
     punti: L.layerGroup().addTo(mappa),
+    scelto: L.layerGroup().addTo(mappa),   // sentiero scelto che non è tra quelli disegnati
     io: L.layerGroup().addTo(mappa)
   };
   const markerPerId = new Map();
   const lineePerId = new Map();   // id sentiero → { linee: [...], bordo: [...], etichetta }
   mappa.on("dragstart", () => { stato.seguiGps = false; });
+  // L'ultima vista resta sul telefono: all'avvio l'app riparte da lì
+  mappa.on("moveend", () => {
+    if (!stato.centro) return;
+    const c = mappa.getCenter();
+    salvaPref("vista", JSON.stringify({ lat: +c.lat.toFixed(5), lon: +c.lng.toFixed(5), z: mappa.getZoom(),
+      clat: +stato.centro.lat.toFixed(5), clon: +stato.centro.lon.toFixed(5) }));
+  });
   const zoomBasso = () => $("mappa").classList.toggle("zoom-basso", mappa.getZoom() < 12);
   mappa.on("zoomend", zoomBasso);
   zoomBasso();
@@ -373,7 +403,8 @@
 
   function aggiornaMessaggio() {
     const ora = new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
-    const dove = stato.centro.daGps ? "dalla tua posizione" : "dal punto cercato";
+    const dove = stato.centro.daGps ? "dalla tua posizione" : stato.centro.ultima ? "dall'ultima posizione"
+      : stato.centro.condiviso ? "dal punto del link ricevuto" : "dal punto cercato";
     let dati = "";
     if (quandoDati) {
       const d = new Date(quandoDati);
@@ -396,18 +427,13 @@
     render();
   }
 
-  // ---------- Riquadri ----------
-  const OPZ_POPUP = {
-    get maxWidth() { return Math.min(360, window.innerWidth - 120); },
-    get minWidth() { return Math.min(270, window.innerWidth - 120); },
-    // le schede dei sentieri sono lunghe: oltre questa altezza scorrono
-    get maxHeight() { return Math.max(260, window.innerHeight - 230); },
-    autoPanPaddingTopLeft: [16, 90], autoPanPaddingBottomRight: [76, 90]
-  };
+  // ---------- Schede (pagina a tutto schermo che si apre toccando un sentiero o un punto) ----------
   function distanzaParlata(m) {
     if (m < 1000) return Math.round(m / 10) * 10 + " metri";
     return (m / 1000).toFixed(1).replace(".", ",") + " chilometri";
   }
+
+  const BOTTONE_MAPPA = '<button type="button" class="pop-vai pop-mappa">Vedi sulla mappa</button>';
 
   function popupPunto(d) {
     const tit = QT.titolo(d);
@@ -442,6 +468,7 @@
     if (d.k === "W" || d.k === "S") righe.push(`<div class="pop-foto" data-id="${attr(d.i)}"></div>`);
     const pulsanti = [`<a class="pop-vai" href="${linkNavigazione(d.la, d.lo)}" target="_blank" rel="noopener">Portami qui</a>`];
     if (tel.length) pulsanti.push(`<a class="pop-vai pop-chiama" href="tel:${attr(tel[0].replace(/[^\d+]/g, ""))}">Chiama</a>`);
+    pulsanti.push(BOTTONE_MAPPA);
     return `<div class="pop" data-voce="${attr(voce.join(" "))}"><h3>${esc(tit)}</h3>${righe.join("")}
       <div class="pop-pulsanti">${pulsanti.join("")}</div></div>`;
   }
@@ -502,11 +529,32 @@
     voce.push("Il punto più vicino è a " + distanzaParlata(s.distanza) + ".");
     righe.push('<p class="fonte">Fonte: OpenStreetMap' + (s.su == null ? "; quote: Copernicus DEM (Open-Meteo)" : "") + "</p>");
     const a = attacco(s);
-    const pulsanti = [`<a class="pop-vai" href="${linkNavigazione(a[0], a[1])}" target="_blank" rel="noopener">Portami all'attacco</a>`];
-    const link = `<a class="pop-link" href="https://hiking.waymarkedtrails.org/#route?id=${attr(s.i.slice(1))}" target="_blank" rel="noopener">Profilo e dettagli su Waymarked Trails</a>`;
+    const pulsanti = [`<a class="pop-vai" href="${linkNavigazione(a[0], a[1])}" target="_blank" rel="noopener">Portami all'attacco</a>`, BOTTONE_MAPPA];
+    const invia = `<a class="pop-vai pop-whatsapp" href="${attr(linkWhatsApp(s))}" target="_blank" rel="noopener">${ICONA_WA}Invia a un amico con WhatsApp</a>`;
+    const waymarked = `<a class="pop-link" href="https://hiking.waymarkedtrails.org/#route?id=${attr(s.i.slice(1))}" target="_blank" rel="noopener">Profilo e dettagli su Waymarked Trails</a>`;
     const testa = `<div class="pop-testa">${segnavia(s, 30)}<h3>${esc(tit)}</h3></div>`;
     return `<div class="pop pop-sentiero" data-voce="${attr(voce.join(" "))}" data-sentiero="${attr(s.i)}">${testa}${righe.join("")}
-      <div class="pop-pulsanti">${pulsanti.join("")}</div>${link}</div>`;
+      <div class="pop-pulsanti">${pulsanti.join("")}</div>${invia}${waymarked}</div>`;
+  }
+
+  // Link che apre Trekking con la stessa mappa, le stesse impostazioni e la scheda di questo sentiero
+  const ICONA_WA = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 3a9 9 0 0 0-7.8 13.5L3 21l4.6-1.2A9 9 0 1 0 12 3Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8.6 8.4c.2-.5.5-.5.8-.5h.5c.2 0 .4 0 .5.4l.7 1.6c.1.2 0 .4-.1.6l-.5.6c-.1.1-.2.3 0 .5.6 1 1.4 1.8 2.4 2.4.2.1.4.1.5 0l.6-.7c.2-.2.4-.2.6-.1l1.6.7c.3.1.4.3.4.5v.5c0 .3-.1.7-.6.9-.5.3-1.4.5-2.6.1a9 9 0 0 1-4.6-4.3c-.6-1.2-.4-2.2-.2-2.7Z" fill="currentColor"/></svg>';
+  function linkCondiviso(s) {
+    const c = mappa.getCenter();
+    const q = new URLSearchParams({
+      ref: "whatsapp", s: s.i,
+      c: stato.centro.lat.toFixed(5) + "," + stato.centro.lon.toFixed(5),
+      v: c.lat.toFixed(5) + "," + c.lng.toFixed(5) + "," + mappa.getZoom(),
+      r: stato.raggio, k: [...stato.categorie].join(","), o: stato.ordine, b: sfondoAttivo
+    });
+    if (stato.filtri.size) q.set("f", [...stato.filtri].join(","));
+    return location.origin + location.pathname + "?" + q.toString().replace(/%2C/g, ",");
+  }
+  function linkWhatsApp(s) {
+    const diff = QT.DIFFICOLTA[s.d];
+    const dati = [diff.sigla !== "?" ? diff.nome : "", QT.formattaKm(s.l), s.su != null ? "↗ " + s.su + " m" : ""].filter(Boolean).join(", ");
+    return "https://wa.me/?text=" + encodeURIComponent(
+      `Guarda questo sentiero su Trekking: ${QT.titoloSentiero(s)}${dati ? " (" + dati + ")" : ""}. ` + linkCondiviso(s));
   }
 
   // ---------- Dislivello dalle quote del terreno ----------
@@ -530,13 +578,12 @@
     Memoria.salva("quote", s.i, d).catch(() => {});
     return d;
   }
-  function riempiQuote(el, s, popup) {
+  function riempiQuote(el, s) {
     const scrivi = (q) => {
       const num = el.querySelector(`[data-num="${CSS.escape(s.i)}"]`);
       if (num) num.innerHTML = numeriSentiero(s, q);
       const prof = el.querySelector(`[data-prof="${CSS.escape(s.i)}"]`);
       if (prof) prof.innerHTML = profiloSvg(q);
-      if (popup && popup.isOpen()) { popup._updateLayout(); popup._updatePosition(); }
     };
     calcolaQuote(s).then((q) => scrivi(q || null)).catch(() => {
       const num = el.querySelector(`[data-num="${CSS.escape(s.i)}"]`);
@@ -565,12 +612,8 @@
   }
 
   let urlFoto = null;
-  function mostraFoto(box, popup) {
+  function mostraFoto(box) {
     const id = box.dataset.id;
-    const ridisegna = () => {
-      if (!popup || !popup.isOpen()) return;
-      popup._updateLayout(); popup._updatePosition(); popup._adjustPan();
-    };
     Memoria.leggi("foto", id).then((blob) => {
       if (!box.isConnected) return;
       if (urlFoto) { URL.revokeObjectURL(urlFoto); urlFoto = null; }
@@ -579,7 +622,6 @@
         box.innerHTML = `<img src="${urlFoto}" alt="La tua foto">
           <div class="pop-foto-azioni"><button type="button" class="pop-rifai">Rifai la foto</button></div>
           <input type="file" accept="image/*" capture="environment" class="pop-file" tabindex="-1" aria-hidden="true">`;
-        box.querySelector("img").addEventListener("load", ridisegna);
       } else {
         box.innerHTML = `<button type="button" class="pop-scatta">📷 Scatta una foto</button>
           <input type="file" accept="image/*" capture="environment" class="pop-file" tabindex="-1" aria-hidden="true">`;
@@ -593,16 +635,16 @@
         riduciFoto(f).then((b) => Memoria.salva("foto", id, b))
           .then(() => {
             if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
-            mostraFoto(box, popup);
+            mostraFoto(box);
           })
-          .catch(() => { toast("Non sono riuscito a salvare la foto."); mostraFoto(box, popup); });
+          .catch(() => { toast("Non sono riuscito a salvare la foto."); mostraFoto(box); });
       });
-      ridisegna();
     }).catch(() => { box.hidden = true; });
   }
 
   // ---------- Sentiero evidenziato ----------
-  let evidenziato = null;
+  // Il sentiero scelto resta evidenziato, intero, anche dopo aver chiuso la scheda; si toglie toccando la mappa.
+  let evidenziato = null, scelto = null;
   function evidenzia(id) {
     if (evidenziato === id) return;
     evidenziato = id;
@@ -614,20 +656,50 @@
       if (su) { v.bordo.forEach((l) => l.bringToFront()); v.linee.forEach((l) => l.bringToFront()); }
     }
   }
-
-  mappa.on("popupopen", (e) => {
-    const el = e.popup.getElement && e.popup.getElement();
-    if (!el) return;
-    const box = el.querySelector(".pop-foto");
-    if (box) mostraFoto(box, e.popup);
-    const ps = el.querySelector("[data-sentiero]");
-    if (ps) {
-      const s = stato.viciniS.find((x) => x.i === ps.dataset.sentiero) || stato.sentieri.find((x) => x.i === ps.dataset.sentiero);
-      evidenzia(ps.dataset.sentiero);
-      if (s && (s.su == null || !quoteCalcolate.has(s.i))) riempiQuote(el, s, e.popup);
+  function scegliSentiero(s) {
+    scelto = s || null;
+    livelli.scelto.clearLayers();
+    // non disegnato (fuori dalle difficoltà scelte o dai filtri): lo si disegna a parte
+    if (s && !lineePerId.has(s.i)) {
+      s.g.forEach((l) => L.polyline(l, { renderer: tela, color: "#ffffff", weight: 11, opacity: .85, interactive: false }).addTo(livelli.scelto));
+      s.g.forEach((l) => L.polyline(l, { renderer: tela, color: coloreDiff(s.d), weight: 7, interactive: false }).addTo(livelli.scelto));
     }
-  });
-  mappa.on("popupclose", () => evidenzia(null));
+    evidenziato = undefined;
+    evidenzia(s ? s.i : null);
+  }
+  mappa.on("click", () => scegliSentiero(null));
+
+  // ---------- Scheda: la terza pagina, dopo la mappa e l'elenco ----------
+  const schedaAperta = () => !$("scheda").hidden;
+  function apriScheda(html, titolo, s) {
+    const corpo = $("scheda-contenuto");
+    corpo.innerHTML = html;
+    $("scheda-titolo").textContent = titolo;
+    $("scheda").hidden = false;
+    $("scheda").querySelector(".pannello-corpo").scrollTop = 0;
+    const box = corpo.querySelector(".pop-foto");
+    if (box) mostraFoto(box);
+    if (s) {
+      if (s.su == null || !quoteCalcolate.has(s.i)) riempiQuote(corpo, s);
+      const wa = corpo.querySelector(".pop-whatsapp");
+      // il link si prepara al momento del tocco, con la mappa com'è adesso
+      if (wa) wa.addEventListener("click", () => {
+        wa.href = linkWhatsApp(s);
+        if (window.goatcounter && window.goatcounter.count) window.goatcounter.count({ path: "invia-sentiero-whatsapp", title: "Invia sentiero su WhatsApp", event: true });
+      });
+    }
+    $("btn-chiudi-scheda").focus();
+    if (letturaAttiva) leggi(corpo.firstElementChild && corpo.firstElementChild.dataset.voce);
+  }
+  function chiudiScheda() {
+    if (!schedaAperta()) return false;
+    $("scheda").hidden = true;
+    $("scheda-contenuto").innerHTML = "";
+    if (sintesi) sintesi.cancel();
+    return true;
+  }
+  $("btn-chiudi-scheda").addEventListener("click", chiudiScheda);
+  $("scheda-contenuto").addEventListener("click", (e) => { if (e.target.closest(".pop-mappa")) chiudiScheda(); });
 
   // ---------- Rendering ----------
   // Ordine sulla mappa: rifugi sopra, poi bivacchi, poi l'acqua; gli aperti sopra i chiusi
@@ -657,13 +729,12 @@
     const sentieri = stato.viciniS.slice().sort((a, b) => ordineDiff(a) - ordineDiff(b));
     for (const s of sentieri) {
       const colore = coloreDiff(s.d);
-      const apri = (e) => {
-        L.popup(OPZ_POPUP).setLatLng(e && e.latlng ? e.latlng : s.vicino).setContent(() => popupSentiero(s)).openOn(mappa);
-      };
+      const apri = () => mostraSentiero(s);
       const bordo = s.g.map((l) => L.polyline(l, { renderer: tela, color: "#ffffff", weight: 7.5, opacity: .85, interactive: false }).addTo(livelli.sentieri));
       const linee = s.g.map((l) => L.polyline(l, {
         renderer: tela, color: colore, weight: 4.5, opacity: 1, lineCap: "round", lineJoin: "round",
-        dashArray: s.d === "EEA" ? "10 6" : s.d === "ND" ? "2 7" : null
+        dashArray: s.d === "EEA" ? "10 6" : s.d === "ND" ? "2 7" : null,
+        bubblingMouseEvents: false   // il tocco sulla linea non arriva alla mappa (che toglierebbe l'evidenziato)
       }).on("click", apri).addTo(livelli.sentieri));
       // segnavia col numero a metà del tratto più lungo
       let etichetta = null;
@@ -673,16 +744,17 @@
         etichetta = L.marker(m, {
           icon: L.divIcon({ className: "", html: `<div class="lbl-sentiero">${segnavia(s, 22)}</div>`, iconSize: null, iconAnchor: [14, 11] }),
           title: QT.titoloSentiero(s), zIndexOffset: -500
-        }).on("click", () => apri({ latlng: L.latLng(m[0], m[1]) })).addTo(livelli.etichette);
+        }).on("click", apri).addTo(livelli.etichette);
       }
       lineePerId.set(s.i, { linee, bordo, etichetta, apri });
     }
+    if (scelto) scegliSentiero(stato.viciniS.find((x) => x.i === scelto.i) || scelto);
 
     const daMostrare = stato.viciniP.slice().sort((a, b) => a.distanza - b.distanza).slice(0, cfg.maxSegnaposto || 800);
     for (const d of daMostrare) {
       const z = (PESO[d.k] || 0) + (d.apertura && !d.apertura.aperto ? -100 : 0);
       const m = L.marker([d.la, d.lo], { icon: icona(classiMarker(d), SIMBOLO[d.k]), title: QT.titolo(d), zIndexOffset: z })
-        .bindPopup(() => popupPunto(d), OPZ_POPUP).addTo(livelli.punti);
+        .on("click", () => mostra(d)).addTo(livelli.punti);
       markerPerId.set(d.i, m);
     }
     if (stato.viciniP.length > daMostrare.length) {
@@ -717,7 +789,7 @@
         <div class="voce-meta">${meta.join("")}</div>
       </div>
       <div class="voce-dist"><b>${QT.formattaDistanza(s.distanza)}</b><small>il punto più vicino</small></div>`;
-    const apri = () => { mostraSentiero(s); chiudiElenco(); };
+    const apri = () => { chiudiElenco(); mostraSentiero(s); };
     li.addEventListener("click", apri);
     li.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); apri(); } });
     return li;
@@ -739,7 +811,7 @@
         <div class="voce-meta">${meta.join("")}</div>
       </div>
       <div class="voce-dist"><b>${QT.formattaDistanza(d.distanza)}</b><small>in linea d'aria</small></div>`;
-    const apri = () => { mostra(d); chiudiElenco(); };
+    const apri = () => { chiudiElenco(); mostra(d); };
     li.addEventListener("click", apri);
     li.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); apri(); } });
     return li;
@@ -766,29 +838,33 @@
     lista.slice(0, 250).forEach((x) => ol.appendChild(x.g ? voceSentiero(x) : vocePunto(x)));
   }
 
+  // Punto: la mappa va sul punto e si apre la sua scheda
   function mostra(d) {
     if (!d) return;
     stato.seguiGps = false;
+    scegliSentiero(null);
     mappa.setView([d.la, d.lo], Math.max(mappa.getZoom(), 15));
-    let m = markerPerId.get(d.i);
-    if (!m) {
+    if (!markerPerId.has(d.i)) {
       // fuori dai tipi scelti: segnaposto temporaneo
-      m = L.marker([d.la, d.lo], { icon: icona(classiMarker(d), SIMBOLO[d.k]), zIndexOffset: 2000 })
-        .bindPopup(() => popupPunto(d), OPZ_POPUP).addTo(livelli.punti);
+      const m = L.marker([d.la, d.lo], { icon: icona(classiMarker(d), SIMBOLO[d.k]), zIndexOffset: 2000 })
+        .on("click", () => mostra(d)).addTo(livelli.punti);
       markerPerId.set(d.i, m);
     }
-    setTimeout(() => m.openPopup(), 250);
+    apriScheda(popupPunto(d), QT.nomeTipo(d));
   }
 
-  function mostraSentiero(s) {
+  // Sentiero: la mappa mostra sempre il sentiero intero, evidenziato, e si apre la sua scheda.
+  // "vista" = [lat, lon, zoom] per rimettere la mappa com'era (link condiviso) invece di inquadrare il sentiero.
+  function mostraSentiero(s, vista) {
     stato.seguiGps = false;
-    const limiti = L.latLngBounds(s.g.flat());
-    mappa.fitBounds(limiti, { paddingTopLeft: [20, 80], paddingBottomRight: [80, 120], maxZoom: 16 });
-    const v = lineePerId.get(s.i);
-    setTimeout(() => {
-      if (v) v.apri({ latlng: L.latLng(s.vicino[0], s.vicino[1]) });
-      else L.popup(OPZ_POPUP).setLatLng(s.vicino).setContent(() => popupSentiero(s)).openOn(mappa);
-    }, 350);
+    if (s.distanza == null && stato.centro) {
+      const v = QT.puntoPiuVicino(s, stato.centro.lat, stato.centro.lon);
+      s = { ...s, distanza: v.distanza, vicino: v.punto };
+    }
+    if (vista) mappa.setView([vista[0], vista[1]], vista[2], { animate: false });
+    else mappa.fitBounds(L.latLngBounds(s.g.flat()), { padding: [30, 30], maxZoom: 16, animate: false });
+    scegliSentiero(s);
+    apriScheda(popupSentiero(s), "Sentiero", s);
   }
 
   // ---------- Posizione ----------
@@ -920,7 +996,6 @@
     if (e.target.checked) stato.categorie.add(k); else stato.categorie.delete(k);
     salvaPref("categorie", [...stato.categorie].join(","));
     scriviCategorie();
-    mappa.closePopup();
     ricalcola();
   }
   $("cat-sentieri").addEventListener("change", cambiaCategoria);
@@ -952,6 +1027,7 @@
     c.setAttribute("aria-pressed", String(on));
     ricalcola();
   }));
+  document.querySelectorAll(".chip.filtro").forEach((c) => c.setAttribute("aria-pressed", String(stato.filtri.has(c.dataset.filtro))));
   function apriElenco() {
     $("pannello").hidden = false;
     $("btn-elenco").setAttribute("aria-expanded", "true");
@@ -1013,11 +1089,12 @@
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
     if (!$("cat-menu").hidden) { apriCategorie(false); $("categoria").focus(); return; }
-    if (!chiudiGuida()) chiudiElenco();
+    if (!chiudiGuida() && !chiudiScheda()) chiudiElenco();
   });
 
   // ---------- Lettura vocale dei riquadri ----------
-  let letturaAttiva = leggiPref("lettura", "1") !== "0";
+  // All'avvio la lettura vocale è sempre spenta: si accende dalla pagina Elenco, per questa volta
+  let letturaAttiva = false;
   const sintesi = window.speechSynthesis;
   function vocItaliana() {
     const voci = sintesi ? sintesi.getVoices() : [];
@@ -1033,18 +1110,10 @@
     u.rate = 1;
     sintesi.speak(u);
   }
-  mappa.on("popupopen", (e) => {
-    if (!letturaAttiva) return;
-    const el = e.popup.getElement && e.popup.getElement();
-    const pop = el ? el.querySelector(".pop") : null;
-    if (pop) leggi(pop.dataset.voce);
-  });
-  mappa.on("popupclose", () => { if (sintesi) sintesi.cancel(); });
   if (!sintesi) { $("riga-lettura").hidden = true; }
   $("lettura").value = letturaAttiva ? "1" : "0";
   $("lettura").addEventListener("change", (e) => {
     letturaAttiva = e.target.value === "1";
-    salvaPref("lettura", letturaAttiva ? "1" : "0");
     if (letturaAttiva) leggi("Lettura vocale attiva.");
     else if (sintesi) sintesi.cancel();
   });
@@ -1056,7 +1125,7 @@
     if (document.hidden || !stato.gps) return;
     stato.seguiGps = true;
     stato.centro = { lat: stato.gps.lat, lon: stato.gps.lon, daGps: true };
-    if (!mappa._popup) mappa.setView([stato.gps.lat, stato.gps.lon], Math.max(mappa.getZoom(), 13));
+    if (!schedaAperta()) mappa.setView([stato.gps.lat, stato.gps.lon], Math.max(mappa.getZoom(), 13));
     carica(false, true);
   }
   function impostaAuto(sec) {
@@ -1064,7 +1133,6 @@
     if (sec > 0) timerAuto = setInterval(autoAggiorna, sec * 1000);
     autoAttivo = sec > 0;
     aggiornaSchermoAcceso();
-    salvaPref("auto", sec);
   }
 
   // ---------- Schermo sempre acceso (Wake Lock) ----------
@@ -1091,9 +1159,8 @@
   document.addEventListener("visibilitychange", aggiornaSchermoAcceso);
   document.addEventListener("pointerdown", () => { if (autoAttivo && !bloccoSchermo) aggiornaSchermoAcceso(); }, { passive: true });
 
-  let secAuto = cfg.autoRefreshSecondi ?? 0;
-  const salvato = leggiPref("auto", null);
-  if (salvato !== null && ["0", "30", "60", "120"].includes(salvato)) secAuto = +salvato;
+  // All'avvio l'auto-refresh è sempre quello di config.js (0 = spento): l'app riparte dall'ultima posizione e non la sposta
+  const secAuto = [0, 30, 60, 120].includes(+cfg.autoRefreshSecondi) ? +cfg.autoRefreshSecondi : 0;
   $("auto-refresh").value = String(secAuto);
   impostaAuto(secAuto);
   $("auto-refresh").addEventListener("change", (e) => {
@@ -1111,12 +1178,38 @@
   });
 
   // Ogni minuto ricalcola chi è aperto (se non stai guardando un riquadro)
-  setInterval(() => { if (stato.centro && !stato.caricando && !document.hidden && $("pannello").hidden && !mappa._popup) ricalcola(); }, 60000);
+  setInterval(() => { if (stato.centro && !stato.caricando && !document.hidden && $("pannello").hidden && !schedaAperta()) ricalcola(); }, 60000);
 
   // Numero di versione nell'ultima riga della pagina Elenco
   $("elenco-versione").textContent = "Versione " + (cfg.versione || "");
 
+  // ---------- Avvio ----------
+  // Con un link condiviso: la stessa mappa e la scheda dello stesso sentiero. Altrimenti si riparte dall'ultima vista
+  // salvata sul telefono: il GPS mostra dove sei ma non sposta la mappa finché non tocchi "Torna alla mia posizione"
+  // (o accendi l'auto-refresh). Al primo avvio, senza una vista salvata, si parte dal GPS.
+  let vistaSalvata = null;
+  try { vistaSalvata = JSON.parse(leggiPref("vista", "null")); } catch (e) { /* ignora */ }
+  if (!vistaSalvata || ![vistaSalvata.lat, vistaSalvata.lon, vistaSalvata.z, vistaSalvata.clat, vistaSalvata.clon].every(isFinite)) vistaSalvata = null;
+  let attesa = null;
+  if (link && (link.centro || link.vista)) {
+    const c = link.centro || link.vista;
+    stato.seguiGps = false;
+    stato.centro = { lat: c[0], lon: c[1], daGps: false, condiviso: true };
+    if (link.vista) mappa.setView([link.vista[0], link.vista[1]], link.vista[2]);
+    else mappa.fitBounds(L.latLng(c[0], c[1]).toBounds(stato.raggio * 2.1));
+    attesa = carica();
+  } else if (vistaSalvata) {
+    stato.seguiGps = false;
+    stato.centro = { lat: vistaSalvata.clat, lon: vistaSalvata.clon, daGps: false, ultima: true };
+    mappa.setView([vistaSalvata.lat, vistaSalvata.lon], vistaSalvata.z);
+    carica();
+  }
   avviaGps();
+  if (attesa && link.sentiero) attesa.then(() => {
+    const s = stato.viciniS.find((x) => x.i === link.sentiero) || stato.sentieri.find((x) => x.i === link.sentiero);
+    if (s) mostraSentiero(s, link.vista);
+    else toast("Non trovo il sentiero del link: forse è cambiato su OpenStreetMap.");
+  });
 
   if ("serviceWorker" in navigator && window.isSecureContext) {
     const cerano = !!navigator.serviceWorker.controller;

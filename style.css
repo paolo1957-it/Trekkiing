@@ -524,3 +524,20 @@ button { font: inherit; color: inherit; cursor: pointer; }
 @media (max-width: 370px) {
   .pannello-testa h2 { font-size: 21px; }
 }
+
+/* ---- Scheda del sentiero o del punto (pagina a tutto schermo, sopra l'elenco, sotto la guida) ---- */
+.pannello.scheda { z-index: 1550; }
+.scheda-corpo { display: block; }
+.scheda-corpo .pop { font: 19px/1.4 var(--font-body); }
+.scheda-corpo .pop h3, .scheda-corpo .pop-testa { margin-right: 0; }
+.scheda-corpo .pop-num { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+.scheda-corpo .pop-foto img { max-height: 320px; }
+.scheda-corpo .profilo { width: 100%; height: 90px; }
+.pop .pop-mappa { border: 0; cursor: pointer; background: var(--bg); color: var(--testo); }
+.pop .pop-whatsapp {
+  display: flex; align-items: center; justify-content: center; gap: 8px; border: 0;
+  background: #1f8f4e; color: #fff;
+}
+.pop .pop-whatsapp:hover { background: #18773f; }
+.scheda-corpo .pop-pulsanti { flex-wrap: wrap; }
+.scheda-corpo .pop-pulsanti .pop-vai { flex: 1 1 140px; }

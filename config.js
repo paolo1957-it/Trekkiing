@@ -3,7 +3,7 @@
  */
 window.QT_CONFIG = {
   // Versione dell'app, mostrata in fondo alla pagina Elenco. Aumentala a ogni aggiornamento.
-  versione: "9",
+  versione: "10",
 
   // Raggio di ricerca iniziale in metri (modificabile anche dall'app)
   raggioMetri: 15000,
@@ -28,6 +28,6 @@ window.QT_CONFIG = {
   // Quote del terreno per calcolare il dislivello quando su OpenStreetMap manca (Open-Meteo, gratuito)
   quote: "https://api.open-meteo.com/v1/elevation",
 
-  // Auto-refresh predefinito in secondi (0 = spento). Si cambia anche dalla pagina elenco.
+  // Auto-refresh a ogni avvio, in secondi (0 = spento: l'app riparte dall'ultima posizione). Si cambia dalla pagina elenco, solo per quella volta.
   autoRefreshSecondi: 0
 };

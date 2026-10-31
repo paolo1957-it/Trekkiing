@@ -154,6 +154,10 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const attr = (t) => String(t).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
   const linkNavigazione = (lat, lon) => `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`;
+  const linkOsm = (d) => {
+    const tipo = { n: "node", w: "way", r: "relation" }[d.i[0]];
+    return tipo ? `https://www.openstreetmap.org/${tipo}/${d.i.slice(1)}` : `https://www.openstreetmap.org/?mlat=${d.la}&mlon=${d.lo}#map=19/${d.la}/${d.lo}`;
+  };
   const sitoWeb = (w) => /^https?:\/\//i.test(w) ? w : "https://" + w;
   const telefoni = (t) => String(t || "").split(/[;,]/).map((x) => x.trim()).filter(Boolean);
   const aPiedi = (m) => "circa " + QT.formattaOre(m / 4000 * 60) + " a piedi in piano";
@@ -464,7 +468,7 @@
     if (d.w) righe.push(`<p><a href="${attr(sitoWeb(d.w))}" target="_blank" rel="noopener">Sito web</a></p>`);
     righe.push(`<p>${QT.formattaDistanza(d.distanza)} in linea d'aria</p>`);
     voce.push(distanzaParlata(d.distanza) + " in linea d'aria.");
-    righe.push('<p class="fonte">Fonte: OpenStreetMap</p>');
+    righe.push(`<p class="fonte">Fonte: OpenStreetMap · <a href="${attr(linkOsm(d))}" target="_blank" rel="noopener">Vedi su OpenStreetMap</a></p>`);
     if (d.k === "W" || d.k === "S") righe.push(`<div class="pop-foto" data-id="${attr(d.i)}"></div>`);
     const pulsanti = [`<a class="pop-vai" href="${linkNavigazione(d.la, d.lo)}" target="_blank" rel="noopener">Portami qui</a>`];
     if (tel.length) pulsanti.push(`<a class="pop-vai pop-chiama" href="tel:${attr(tel[0].replace(/[^\d+]/g, ""))}">Chiama</a>`);
@@ -527,7 +531,7 @@
     if (s.nota) righe.push(`<p>${esc(s.nota)}</p>`);
     righe.push(`<p>Il punto più vicino è a ${QT.formattaDistanza(s.distanza)} in linea d'aria</p>`);
     voce.push("Il punto più vicino è a " + distanzaParlata(s.distanza) + ".");
-    righe.push('<p class="fonte">Fonte: OpenStreetMap' + (s.su == null ? "; quote: Copernicus DEM (Open-Meteo)" : "") + "</p>");
+    righe.push(`<p class="fonte">Fonte: <a href="https://www.openstreetmap.org/relation/${attr(s.i.slice(1))}" target="_blank" rel="noopener">OpenStreetMap</a>` + (s.su == null ? "; quote: Copernicus DEM (Open-Meteo)" : "") + "</p>");
     const a = attacco(s);
     const pulsanti = [`<a class="pop-vai" href="${linkNavigazione(a[0], a[1])}" target="_blank" rel="noopener">Portami all'attacco</a>`, BOTTONE_MAPPA];
     const sv = streetView(s);

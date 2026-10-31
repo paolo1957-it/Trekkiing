@@ -567,15 +567,11 @@
       <p class="pop-scarica-spiega">Per aprirlo in un'app di navigazione (Komoot, Gaia GPS, OsmAnd, Google Earth…).</p>
       <fieldset><legend>Formato</legend><div class="pop-scelte">${formati}</div></fieldset>
       <fieldset><legend>Direzione</legend><div class="pop-scelte pop-scelte-col">${dir}</div></fieldset>
-      <div class="pop-pulsanti">
-        <button type="button" class="pop-vai pop-ottieni" data-modo="apri">${ICONA_APRI}Apri in un'app</button>
-        <button type="button" class="pop-vai pop-ottieni" data-modo="salva">${ICONA_SCARICA}Salva il file</button></div>
-      <p class="pop-scarica-spiega">«Apri in un'app» apre il menu Condividi: scorri la fila delle app fino ad <b>Altro</b> per trovare OsmAnd,
-        o scorri in basso fino a <b>Salva in File</b>. «Salva il file» lo mette nei Download dell'app File.</p>
-      <a class="pop-link" href="https://ra.osmsurround.org/exportRelation/gpx?relationId=${attr(s.i.slice(1))}" target="_blank" rel="noopener">Non funziona? GPX da Relation Analyzer (si apre in Safari)</a></div>`;
+      <button type="button" class="pop-vai pop-ottieni">${ICONA_SCARICA}Salva il file</button>
+      <p class="pop-scarica-spiega">Poi apri l'app <b>File</b>, cartella <b>Download</b>: tocca il file (o tienilo premuto → Condividi)
+        e scegli l'app, per esempio OsmAnd.</p></div>`;
   }
   const ICONA_SCARICA = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  const ICONA_APRI = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 15V3m0 0-4.5 4.5M12 3l4.5 4.5M7 10H5v11h14V10h-2" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   function preparaScarica(corpo, s) {
     const box = corpo.querySelector(".pop-scarica");
     if (!box) return;
@@ -585,9 +581,7 @@
       const et = box.querySelectorAll('input[name="scarica-dir"] + span');
       if (et.length === 3) { et[0].textContent = `${a} → ${b}`; et[1].textContent = `${b} → ${a}`; }
     }).catch(() => {});
-    // senza il menu Condividi (computer, browser vecchi) resta solo «Salva il file»
-    if (!puoCondividereFile()) box.querySelector('[data-modo="apri"]').remove();
-    box.querySelectorAll(".pop-ottieni").forEach((btn) => btn.addEventListener("click", async () => {
+    box.querySelector(".pop-ottieni").addEventListener("click", async () => {
       const formato = box.querySelector('input[name="scarica-formato"]:checked').value;
       const dir = +box.querySelector('input[name="scarica-dir"]:checked').value;
       const p = dettaglioWmt(s);
@@ -606,24 +600,13 @@
         osm: "https://www.openstreetmap.org/relation/" + s.i.slice(1)
       });
       const nomeF = QT.nomeFile(nome, formato);
-      consegnaFile(testo, nomeF, QT.FORMATI[formato].tipo, btn.dataset.modo === "apri");
+      consegnaFile(testo, nomeF, QT.FORMATI[formato].tipo);
       if (ridotto) toast(s.parz ? "Waymarked Trails non risponde: file con il solo tratto in zona" : "Waymarked Trails non risponde: file con la traccia semplificata dell'app");
       if (window.goatcounter && window.goatcounter.count) window.goatcounter.count({ path: "scarica-" + formato, title: "Scarica percorso " + formato.toUpperCase(), event: true });
-    }));
+    });
   }
-  function puoCondividereFile() {
-    try { return !!(navigator.canShare && navigator.canShare({ files: [new File(["x"], "prova.gpx", { type: "application/gpx+xml" })] })); }
-    catch (e) { return false; }
-  }
-  // «Apri in un'app»: menu Condividi con il solo file (senza titolo né testo, altrimenti l'iPhone
-  // lo tratta come un messaggio e nasconde «Salva in File» e le app come OsmAnd). «Salva il file»: download.
-  async function consegnaFile(testo, nome, tipo, condividi) {
-    if (condividi) {
-      try {
-        const f = new File([testo], nome, { type: tipo });
-        if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f] }); return; }
-      } catch (e) { if (e && e.name === "AbortError") return; }
-    }
+  // Download del file. (Il menu Condividi con il file è stato tolto: sull'iPhone non offriva OsmAnd.)
+  async function consegnaFile(testo, nome, tipo) {
     // Sull'iPhone, con il service worker attivo, il file diventa un indirizzo vero del sito (…/scarica/nome.gpx):
     // i download "blob:" lì spesso non arrivano in File. Chrome invece riscarica dal sito, quindi lì si usa il blob.
     const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);

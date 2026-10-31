@@ -571,7 +571,8 @@
         <button type="button" class="pop-vai pop-ottieni" data-modo="apri">${ICONA_APRI}Apri in un'app</button>
         <button type="button" class="pop-vai pop-ottieni" data-modo="salva">${ICONA_SCARICA}Salva il file</button></div>
       <p class="pop-scarica-spiega">«Apri in un'app» apre il menu Condividi: scorri la fila delle app fino ad <b>Altro</b> per trovare OsmAnd,
-        o scorri in basso fino a <b>Salva in File</b>. «Salva il file» lo mette nei Download dell'app File.</p></div>`;
+        o scorri in basso fino a <b>Salva in File</b>. «Salva il file» lo mette nei Download dell'app File.</p>
+      <a class="pop-link" href="https://ra.osmsurround.org/exportRelation/gpx?relationId=${attr(s.i.slice(1))}" target="_blank" rel="noopener">Non funziona? GPX da Relation Analyzer (si apre in Safari)</a></div>`;
   }
   const ICONA_SCARICA = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   const ICONA_APRI = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 15V3m0 0-4.5 4.5M12 3l4.5 4.5M7 10H5v11h14V10h-2" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -623,11 +624,29 @@
         if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f] }); return; }
       } catch (e) { if (e && e.name === "AbortError") return; }
     }
+    // Sull'iPhone, con il service worker attivo, il file diventa un indirizzo vero del sito (…/scarica/nome.gpx):
+    // i download "blob:" lì spesso non arrivano in File. Chrome invece riscarica dal sito, quindi lì si usa il blob.
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    if (ios && navigator.serviceWorker && navigator.serviceWorker.controller && window.caches) {
+      try {
+        const indirizzo = new URL("scarica/" + encodeURIComponent(nome), location.href).href;
+        const c = await caches.open("file-percorsi");
+        for (const vecchio of await c.keys()) await c.delete(vecchio);
+        await c.put(indirizzo, new Response(testo, { headers: {
+          "Content-Type": tipo, "Content-Disposition": `attachment; filename="${nome}"`
+        } }));
+        apriLink(indirizzo, nome);
+        return;
+      } catch (e) { /* si ripiega sul blob */ }
+    }
     const url = URL.createObjectURL(new Blob([testo], { type: tipo }));
+    apriLink(url, nome);
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }
+  function apriLink(url, nome) {
     const a = document.createElement("a");
     a.href = url; a.download = nome; a.rel = "noopener";
     document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
 
   // Street View di Google Maps ai due estremi del sentiero (i più lontani tra loro); per un anello uno solo.

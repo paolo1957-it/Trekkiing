@@ -535,7 +535,84 @@
     const waymarked = `<a class="pop-link" href="https://hiking.waymarkedtrails.org/#route?id=${attr(s.i.slice(1))}" target="_blank" rel="noopener">Profilo e dettagli su Waymarked Trails</a>`;
     const testa = `<div class="pop-testa">${segnavia(s, 30)}<h3>${esc(tit)}</h3></div>`;
     return `<div class="pop pop-sentiero" data-voce="${attr(voce.join(" "))}" data-sentiero="${attr(s.i)}">${testa}${righe.join("")}
-      <div class="pop-pulsanti">${pulsanti.join("")}</div>${sv}${invia}${waymarked}</div>`;
+      <div class="pop-pulsanti">${pulsanti.join("")}</div>${sv}${scaricaHtml(s)}${invia}${waymarked}</div>`;
+  }
+
+  // ---------- Scarica il percorso (GPX, KML, GeoJSON) ----------
+  // Il tracciato intero e in ordine viene da Waymarked Trails (lo stesso dei loro file "Ottieni file"),
+  // chiesto appena si apre la scheda così il file è pronto al tocco. Se non risponde, si usa la traccia
+  // dell'app (semplificata, e per le alte vie solo il tratto in zona).
+  const dettagliWmt = new Map();
+  function dettaglioWmt(s) {
+    if (!dettagliWmt.has(s.i)) {
+      const p = fetchJson(`https://hiking.waymarkedtrails.org/api/v1/details/relation/${s.i.slice(1)}`, {}, 15000)
+        .then((d) => { p.valore = d; return d; })
+        .catch((e) => { dettagliWmt.delete(s.i); throw e; });
+      p.catch(() => {});
+      dettagliWmt.set(s.i, p);
+    }
+    return dettagliWmt.get(s.i);
+  }
+  function scaricaHtml(s) {
+    const [a, b] = QT.capiPercorso(s, null);
+    const formati = [["gpx", "GPX"], ["kml", "KML"], ["geojson", "GeoJSON"]].map(([v, t], i) =>
+      `<label><input type="radio" name="scarica-formato" value="${v}"${i ? "" : " checked"}> ${t}</label>`).join("");
+    const dir = [[1, `${esc(a)} → ${esc(b)}`], [-1, `${esc(b)} → ${esc(a)}`], [0, "entrambe le direzioni"]].map(([v, t], i) =>
+      `<label><input type="radio" name="scarica-dir" value="${v}"${i ? "" : " checked"}> <span>${t}</span></label>`).join("");
+    return `<div class="pop-scarica"><b>Scarica il percorso</b>
+      <p class="pop-scarica-spiega">Per aprirlo in un'app di navigazione (Komoot, Gaia GPS, OsmAnd, Google Earth…).</p>
+      <fieldset><legend>Formato</legend><div class="pop-scelte">${formati}</div></fieldset>
+      <fieldset><legend>Direzione</legend><div class="pop-scelte pop-scelte-col">${dir}</div></fieldset>
+      <button type="button" class="pop-vai pop-ottieni">${ICONA_SCARICA}Ottieni file</button></div>`;
+  }
+  const ICONA_SCARICA = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  function preparaScarica(corpo, s) {
+    const box = corpo.querySelector(".pop-scarica");
+    if (!box) return;
+    // con l'itinerario di Waymarked Trails i nomi dei due capi sono più precisi
+    dettaglioWmt(s).then((d) => {
+      const [a, b] = QT.capiPercorso(s, d);
+      const et = box.querySelectorAll('input[name="scarica-dir"] + span');
+      if (et.length === 3) { et[0].textContent = `${a} → ${b}`; et[1].textContent = `${b} → ${a}`; }
+    }).catch(() => {});
+    box.querySelector(".pop-ottieni").addEventListener("click", async () => {
+      const formato = box.querySelector('input[name="scarica-formato"]:checked').value;
+      const dir = +box.querySelector('input[name="scarica-dir"]:checked').value;
+      const p = dettaglioWmt(s);
+      let d = p.valore, linee = null, ridotto = false;
+      if (!d) { toast("Preparo il file…"); try { d = await p; } catch (e) { d = null; } }
+      if (d) linee = QT.tracciaWmt(d, dir);
+      if (!linee || !linee.length) {
+        // ripiego: la traccia dell'app, nell'ordine in cui è salvata
+        linee = s.g.map((l) => l.slice());
+        if (dir === -1) linee = linee.reverse().map((l) => l.reverse());
+        ridotto = true;
+      }
+      const nome = QT.titoloSentiero(s);
+      const testo = QT.fileTraccia(linee, nome, formato, {
+        fonte: "Dati © OpenStreetMap (ODbL)" + (ridotto ? "" : " via Waymarked Trails"),
+        osm: "https://www.openstreetmap.org/relation/" + s.i.slice(1)
+      });
+      const nomeF = QT.nomeFile(nome, formato);
+      consegnaFile(testo, nomeF, QT.FORMATI[formato].tipo);
+      if (ridotto) toast(s.parz ? "Waymarked Trails non risponde: file con il solo tratto in zona" : "Waymarked Trails non risponde: file con la traccia semplificata dell'app");
+      if (window.goatcounter && window.goatcounter.count) window.goatcounter.count({ path: "scarica-" + formato, title: "Scarica percorso " + formato.toUpperCase(), event: true });
+    });
+  }
+  // Sul telefono si apre il menu Condividi (Salva su File, o apri in un'app di navigazione); altrimenti si scarica.
+  async function consegnaFile(testo, nome, tipo) {
+    const tattile = window.matchMedia && matchMedia("(pointer: coarse)").matches;
+    if (tattile && navigator.canShare && typeof File === "function") {
+      try {
+        const f = new File([testo], nome, { type: tipo });
+        if (navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: nome }); return; }
+      } catch (e) { if (e && e.name === "AbortError") return; }
+    }
+    const url = URL.createObjectURL(new Blob([testo], { type: tipo }));
+    const a = document.createElement("a");
+    a.href = url; a.download = nome; a.rel = "noopener";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
 
   // Street View di Google Maps ai due estremi del sentiero (i più lontani tra loro); per un anello uno solo.
@@ -702,6 +779,7 @@
     if (box) mostraFoto(box);
     if (s) {
       if (s.su == null || !quoteCalcolate.has(s.i)) riempiQuote(corpo, s);
+      preparaScarica(corpo, s);
       const wa = corpo.querySelector(".pop-whatsapp");
       // il link si prepara al momento del tocco, con la mappa com'è adesso
       if (wa) wa.addEventListener("click", () => {

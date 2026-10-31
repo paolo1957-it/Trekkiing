@@ -3,7 +3,7 @@
  */
 window.QT_CONFIG = {
   // Versione dell'app, mostrata in fondo alla pagina Elenco. Aumentala a ogni aggiornamento.
-  versione: "14",
+  versione: "15",
 
   // Raggio di ricerca iniziale in metri (modificabile anche dall'app)
   raggioMetri: 15000,

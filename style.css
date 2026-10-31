@@ -545,3 +545,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .pop-streetview > b { font: 700 13px var(--font-body); color: var(--testo-2); text-transform: uppercase; letter-spacing: .04em; }
 .pop-streetview .pop-pulsanti { margin-top: 8px; flex-wrap: wrap; }
 .pop .pop-sv { display: flex; align-items: center; justify-content: center; gap: 6px; flex: 1 1 140px; margin-top: 0; font-size: 17px; background: #f4b400; color: #1c1c1c; }
+.pop-scarica { margin-top: 14px; padding: 10px 12px 12px; border-radius: 12px; background: var(--bg); }
+.pop-scarica > b { font: 700 13px var(--font-body); color: var(--testo-2); text-transform: uppercase; letter-spacing: .04em; }
+.pop-scarica .pop-scarica-spiega { margin: 4px 0 6px; font-size: 15px; color: var(--testo-2); }
+.pop-scarica fieldset { border: 1px solid var(--bordo, #d0d0d0); border-radius: 10px; margin: 8px 0 0; padding: 4px 10px 8px; }
+.pop-scarica legend { font-size: 14px; color: var(--testo-2); padding: 0 4px; }
+.pop-scelte { display: flex; flex-wrap: wrap; gap: 4px 18px; }
+.pop-scelte-col { flex-direction: column; }
+.pop-scelte label { display: flex; align-items: center; gap: 8px; min-height: 40px; cursor: pointer; }
+.pop-scelte input { width: 22px; height: 22px; margin: 0; accent-color: #1f6fb2; }
+.pop .pop-ottieni { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin-top: 10px; border: 0; cursor: pointer; }

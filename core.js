@@ -575,12 +575,104 @@
   const nomeTipo = (d) => TIPI[d.k].nome;
   const titolo = (d) => capitalizza(d.n) || nomeTipo(d);
 
+
+  // ---------- File di navigazione (GPX, KML, GeoJSON) ----------
+  // Dal dettaglio di Waymarked Trails (api/v1/details/relation/ID): le vie del percorso nell'ordine della
+  // relazione, in coordinate EPSG:3857. "dir" della via: 0 = in tutte e due le direzioni, 1 = solo andata,
+  // -1 = solo ritorno. Come fa Waymarked Trails: si tengono le vie della direzione scelta e,
+  // per il ritorno, si capovolge tutto. Le varianti ("appendices") non si includono.
+  function daMercatore(x, y) {
+    const lon = x / R_TERRA * 180 / Math.PI;
+    const lat = (2 * Math.atan(Math.exp(y / R_TERRA)) - Math.PI / 2) * 180 / Math.PI;
+    return [+lat.toFixed(6), +lon.toFixed(6)];
+  }
+  function tratteWmt(nodo, out) {
+    if (!nodo) return out;
+    if (nodo.route_type === "route") for (const n of nodo.main || []) tratteWmt(n, out);
+    else if (nodo.route_type === "split") {
+      for (const n of nodo.forward || []) tratteWmt(n, out);
+      for (const n of nodo.backward || []) tratteWmt(n, out);
+    }
+    else if (nodo.route_type === "linear" && nodo.ways && nodo.ways.length) {
+      let c = [];
+      for (const w of nodo.ways) { c.pop(); c = c.concat(w.geometry.coordinates); }
+      out.push({ dir: nodo.ways[0].direction || 0, punti: c });
+    }
+    return out;
+  }
+  /** Linee [[lat,lon],…] nella direzione scelta (1 andata, -1 ritorno, 0 entrambe), unendo i pezzi contigui. */
+  function tracciaWmt(dettaglio, direzione) {
+    const tratte = tratteWmt(dettaglio && dettaglio.route, []);
+    const linee = [];
+    let cur = null, ultimo = null, dirCur = null;
+    for (const t of tratte) {
+      if (direzione !== 0 && t.dir !== 0 && t.dir !== direzione) continue;
+      const primo = t.punti[0];
+      const attacca = cur && ultimo && primo[0] === ultimo[0] && primo[1] === ultimo[1] && (direzione !== 0 || dirCur === t.dir);
+      if (attacca) cur.push(...t.punti.slice(1));
+      else { cur = t.punti.slice(); linee.push(cur); }
+      ultimo = t.punti[t.punti.length - 1];
+      dirCur = t.dir;
+    }
+    let out = linee.map((l) => l.map((p) => daMercatore(p[0], p[1])));
+    if (direzione === -1) out = out.reverse().map((l) => l.reverse());
+    return out.filter((l) => l.length > 1);
+  }
+  /** I due capi del percorso per le scelte di direzione: itinerario di Waymarked Trails, poi from/to. */
+  function capiPercorso(s, dettaglio) {
+    const it = dettaglio && dettaglio.itinerary;
+    if (it && it.length >= 2) return [it[0], it[it.length - 1]];
+    if (s && s.da && s.a) return [s.da, s.a];
+    return ["Inizio", "Fine"];
+  }
+  const xml = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" }[c]));
+  const FORMATI = {
+    gpx: { est: "gpx", tipo: "application/gpx+xml" },
+    kml: { est: "kml", tipo: "application/vnd.google-earth.kml+xml" },
+    geojson: { est: "geojson", tipo: "application/geo+json" }
+  };
+  /** Testo del file: linee [[lat,lon],…], nome del percorso, formato "gpx" | "kml" | "geojson". */
+  function fileTraccia(linee, nome, formato, info) {
+    info = info || {};
+    if (formato === "geojson") {
+      return JSON.stringify({
+        type: "FeatureCollection",
+        features: [{
+          type: "Feature",
+          properties: Object.assign({ name: nome }, info.osm ? { osm: info.osm } : {}, info.fonte ? { source: info.fonte } : {}),
+          geometry: { type: "MultiLineString", coordinates: linee.map((l) => l.map((p) => [p[1], p[0]])) }
+        }]
+      });
+    }
+    if (formato === "kml") {
+      const ls = linee.map((l) => "<LineString><tessellate>1</tessellate><coordinates>" +
+        l.map((p) => p[1] + "," + p[0]).join(" ") + "</coordinates></LineString>").join("");
+      return '<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document>' +
+        `<name>${xml(nome)}</name><Style id="t"><LineStyle><color>ff0000e6</color><width>4</width></LineStyle></Style>` +
+        `<Placemark><name>${xml(nome)}</name>${info.fonte ? `<description>${xml(info.fonte)}</description>` : ""}<styleUrl>#t</styleUrl>` +
+        `<MultiGeometry>${ls}</MultiGeometry></Placemark></Document></kml>\n`;
+    }
+    const segs = linee.map((l) => "<trkseg>" + l.map((p) => `<trkpt lat="${p[0]}" lon="${p[1]}"/>`).join("") + "</trkseg>").join("\n");
+    return '<?xml version="1.0" encoding="UTF-8"?>\n' +
+      '<gpx version="1.1" creator="Qui-Trekking" xmlns="http://www.topografix.com/GPX/1/1">\n' +
+      `<metadata><name>${xml(nome)}</name>${info.fonte ? `<copyright author="OpenStreetMap"><license>https://opendatacommons.org/licenses/odbl/</license></copyright>` : ""}` +
+      `${info.osm ? `<link href="${xml(info.osm)}"><text>OpenStreetMap</text></link>` : ""}</metadata>\n` +
+      `<trk><name>${xml(nome)}</name>\n${segs}\n</trk>\n</gpx>\n`;
+  }
+  /** Nome del file senza caratteri vietati */
+  function nomeFile(nome, formato) {
+    const base = String(nome || "sentiero").normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .replace(/[^\w\- ]+/g, " ").trim().replace(/\s+/g, "_").slice(0, 60) || "sentiero";
+    return base + "." + FORMATI[formato].est;
+  }
+
   const API = {
     distanza, formattaDistanza, formattaKm, formattaQuota, formattaOre, DIFFICOLTA, ORDINE_DIFF, difficolta,
     TIPI, tipoDaTag, compatta, leggiSimbolo, svgSimbolo, SIMBOLO_CAI, unisciTratti, lunghezzaLinea, metriDaTag, minutiDaTag,
     compattaSentiero, puntoPiuVicino, estremita, campioni, dislivello, tempoStimato, titoloSentiero, sottotitoloSentiero,
     leggiOrari, statoApertura, testoApertura, orariLeggibili, riquadro, queryOverpass, leggiRisposta,
-    preparaPunti, prepareSentieri, capitalizza, nomeTipo, titolo
+    preparaPunti, prepareSentieri, capitalizza, nomeTipo, titolo,
+    daMercatore, tracciaWmt, capiPercorso, fileTraccia, nomeFile, FORMATI
   };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   else root.QT = API;

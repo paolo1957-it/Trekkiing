@@ -524,3 +524,34 @@ button { font: inherit; color: inherit; cursor: pointer; }
 @media (max-width: 370px) {
   .pannello-testa h2 { font-size: 21px; }
 }
+
+/* ---- Scheda del sentiero o del punto (pagina a tutto schermo, sopra l'elenco, sotto la guida) ---- */
+.pannello.scheda { z-index: 1550; }
+.scheda-corpo { display: block; }
+.scheda-corpo .pop { font: 19px/1.4 var(--font-body); }
+.scheda-corpo .pop h3, .scheda-corpo .pop-testa { margin-right: 0; }
+.scheda-corpo .pop-num { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+.scheda-corpo .pop-foto img { max-height: 320px; }
+.scheda-corpo .profilo { width: 100%; height: 90px; }
+.pop .pop-mappa { border: 0; cursor: pointer; background: var(--bg); color: var(--testo); }
+.pop .pop-whatsapp {
+  display: flex; align-items: center; justify-content: center; gap: 8px; border: 0;
+  background: #1f8f4e; color: #fff;
+}
+.pop .pop-whatsapp:hover { background: #18773f; }
+.scheda-corpo .pop-pulsanti { flex-wrap: wrap; }
+.scheda-corpo .pop-pulsanti .pop-vai { flex: 1 1 140px; }
+.pop-streetview { margin-top: 14px; padding: 10px 12px 12px; border-radius: 12px; background: var(--bg); }
+.pop-streetview > b { font: 700 13px var(--font-body); color: var(--testo-2); text-transform: uppercase; letter-spacing: .04em; }
+.pop-streetview .pop-pulsanti { margin-top: 8px; flex-wrap: wrap; }
+.pop .pop-sv { display: flex; align-items: center; justify-content: center; gap: 6px; flex: 1 1 140px; margin-top: 0; font-size: 17px; background: #f4b400; color: #1c1c1c; }
+.pop-scarica { margin-top: 14px; padding: 10px 12px 12px; border-radius: 12px; background: var(--bg); }
+.pop-scarica > b { font: 700 13px var(--font-body); color: var(--testo-2); text-transform: uppercase; letter-spacing: .04em; }
+.pop-scarica .pop-scarica-spiega { margin: 4px 0 6px; font-size: 15px; color: var(--testo-2); }
+.pop-scarica fieldset { border: 1px solid var(--bordo, #d0d0d0); border-radius: 10px; margin: 8px 0 0; padding: 4px 10px 8px; }
+.pop-scarica legend { font-size: 14px; color: var(--testo-2); padding: 0 4px; }
+.pop-scelte { display: flex; flex-wrap: wrap; gap: 4px 18px; }
+.pop-scelte-col { flex-direction: column; }
+.pop-scelte label { display: flex; align-items: center; gap: 8px; min-height: 40px; cursor: pointer; }
+.pop-scelte input { width: 22px; height: 22px; margin: 0; accent-color: #1f6fb2; }
+.pop .pop-ottieni { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin-top: 10px; border: 0; cursor: pointer; }

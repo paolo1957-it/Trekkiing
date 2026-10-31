@@ -28,6 +28,12 @@ Web app per il telefono che mostra i **sentieri** vicino a te, con lo stesso asp
   il secret `NTFY_TOPIC` con il nome del canale (Settings → Secrets and variables → Actions).
 - L'ultima risposta resta sul telefono (IndexedDB): in montagna senza campo l'app usa quella.
   Anche le quote calcolate e le foto delle fontanelle restano sul telefono.
+- Toccando un sentiero o un punto si apre la sua **scheda**, una pagina a tutto schermo (non un riquadro sulla mappa).
+  Per un sentiero la mappa inquadra sempre il **sentiero intero** e lo lascia evidenziato; nella scheda il pulsante
+  **Invia a un amico con WhatsApp** manda un link (`?s=sentiero&c=centro&v=lat,lon,zoom&r=raggio&k=cosa mostrare&f=filtri&o=ordine&b=mappa`)
+  che apre Trekking con la stessa mappa, le stesse impostazioni e la stessa scheda.
+- A ogni avvio la **lettura vocale** è spenta e l'**auto-refresh** è a 0: l'app riparte dall'**ultima posizione** guardata
+  (salvata sul telefono) e il GPS non sposta la mappa finché non si tocca il pulsante della posizione.
 - Pulsanti in basso: **rifugio** più vicino (aperto, se gli orari lo dicono) e **fontanella** più vicina.
 - Mappe: topografica (OpenTopoMap, predefinita), stradale, stradale con nomi grandi, satellite.
 - Nell'elenco c'è il pulsante per chiamare il **112** (soccorso alpino).

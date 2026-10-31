@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="style.css?v=8">
+  <link rel="stylesheet" href="style.css?v=11">
 </head>
 <body>
   <div class="app">
@@ -131,8 +131,8 @@
         <label class="auto" for="lettura" id="riga-lettura">
           <span>LETTURA VOCALE</span>
           <select id="lettura">
-            <option value="1" selected>Attiva</option>
-            <option value="0">Spenta</option>
+            <option value="1">Attiva</option>
+            <option value="0" selected>Spenta</option>
           </select>
         </label>
 
@@ -164,6 +164,16 @@
       </div>
     </section>
 
+    <section class="pannello scheda" id="scheda" aria-labelledby="scheda-titolo" hidden>
+      <header class="pannello-testa">
+        <h2 id="scheda-titolo">Scheda</h2>
+        <button class="chiudi" id="btn-chiudi-scheda" type="button" aria-label="Chiudi la scheda e torna alla mappa">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        </button>
+      </header>
+      <div class="pannello-corpo scheda-corpo" id="scheda-contenuto"></div>
+    </section>
+
     <section class="pannello guida" id="guida" aria-label="Guida all'app" hidden>
       <header class="pannello-testa">
         <h2>Guida</h2>
@@ -188,9 +198,20 @@
           <p>Ogni sentiero è una linea colorata secondo la scala di difficoltà del CAI. Ingrandendo la mappa compare il
             <b>segnavia</b> con il numero del sentiero, come quello dipinto su sassi e alberi.</p>
           <ul class="g-lista" id="g-diff"></ul>
-          <p>Tocca la linea o il segnavia per aprire la <b>scheda del sentiero</b>: difficoltà, lunghezza, dislivello in salita e in discesa,
-            quota minima e massima, tempo di percorrenza, partenza e arrivo. Il sentiero scelto viene evidenziato sulla mappa.
+          <p>Tocca la linea o il segnavia per aprire la <b>scheda del sentiero</b>, una pagina a tutto schermo: difficoltà, lunghezza,
+            dislivello in salita e in discesa, quota minima e massima, tempo di percorrenza, partenza e arrivo. Intanto la mappa
+            inquadra il <b>sentiero intero</b> e lo evidenzia: chiudendo la scheda (X o <b>Vedi sulla mappa</b>) lo trovi lì; tocca un punto
+            vuoto della mappa per togliere l'evidenziato.
             <b>Portami all'attacco</b> apre il navigatore verso l'estremità del sentiero più vicina a te.</p>
+          <p><b>Street View agli estremi</b>: due pulsanti aprono Google Maps con la foto sferica più vicina a ciascuna estremità
+            del sentiero, da girare col dito. In montagna spesso non c'è la macchina di Google: si vede la foto sferica di un escursionista
+            o quella della strada più vicina.</p>
+          <p><b>Scarica il percorso</b>: scegli il formato (GPX va bene quasi ovunque; KML per Google Earth; GeoJSON per i programmi
+            di mappe) e la direzione, poi tocca <b>Ottieni file</b>. Sull'iPhone si apre il menu Condividi: puoi aprirlo subito in un'app
+            di navigazione (Komoot, Gaia GPS, OsmAnd…) o salvarlo in File. Il tracciato intero viene da Waymarked Trails; se non risponde,
+            il file usa la traccia dell'app, semplificata.</p>
+          <p><b>Invia a un amico con WhatsApp</b> manda un link: chi lo apre vede Trekking con la stessa mappa, lo stesso raggio,
+            le stesse scelte di cosa mostrare e la scheda dello stesso sentiero.</p>
           <p>Il <b>dislivello</b> e il <b>tempo</b> sono quelli scritti su OpenStreetMap; quando mancano l'app li calcola
             dalle quote del terreno (indicati come <i>stima</i>). Il tempo stimato è per un escursionista medio, senza soste.</p>
         </section>
@@ -203,7 +224,7 @@
             <li><span class="g-segno"><span class="mk tipo-R chiuso"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M2.5 12.5 12 4l9.5 8.5-1.5 1.6L12 7 4 14.1Z" fill="currentColor"/><path d="M5.5 13.5 12 8l6.5 5.5V21h-4.5v-5h-4v5H5.5Z" fill="currentColor"/></svg></span></span><div><b>Più chiaro, con pallino rosso</b>: chiuso adesso.</div></li>
             <li><span class="g-segno"><span class="io"></span></span><div><b>Punto azzurro</b>: sei tu. Il <b>cerchio tratteggiato</b> è il raggio di ricerca.</div></li>
           </ul>
-          <p>Tocca un segnaposto per aprire il <b>riquadro</b>: nome, quota, gestore, posti letto, orari, telefono, sito e distanza.
+          <p>Tocca un segnaposto per aprire la sua <b>scheda</b>: nome, quota, gestore, posti letto, orari, telefono, sito e distanza.
             Nella scheda di una <b>fontanella</b> o di una <b>sorgente</b> puoi scattare una foto: resta salvata solo sul tuo telefono.</p>
         </section>
 
@@ -213,7 +234,7 @@
             <li><span class="g-segno"><span class="g-barra">Cerca un luogo…</span></span><div><b>Cerca</b>: scrivi un paese, una valle o un rifugio per vedere i sentieri lì invece che intorno a te.</div></li>
             <li><span class="g-segno"><span class="g-barra corto">6 tipi</span></span><div><b>Cosa mostrare</b>: spunta le difficoltà dei sentieri e i tipi di punti che vuoi vedere, anche più di uno insieme. All'inizio sono scelti tutti tranne le <b>sorgenti</b>, che spesso non sono potabili.</div></li>
             <li><span class="g-segno"><span class="g-barra corto">15 km</span></span><div><b>Raggio</b>: quanto lontano cercare, da 2 a 25 km (di solito 15). Con un raggio grande in montagna i sentieri sono tanti e lo scaricamento è più lento.</div></li>
-            <li><span class="g-segno"><span class="g-fab"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="currentColor"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="2"/></svg></span></span><div><b>Posizione</b>: riporta la mappa su di te e la fa seguire mentre ti sposti.</div></li>
+            <li><span class="g-segno"><span class="g-fab"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="currentColor"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="2"/></svg></span></span><div><b>Posizione</b>: riporta la mappa su di te e la fa seguire mentre ti sposti. All'avvio l'app riparte dall'ultima zona che guardavi: tocca qui per tornare dove sei.</div></li>
             <li><span class="g-segno"><span class="g-fab nero"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="4.5" cy="6" r="1.6" fill="currentColor"/><circle cx="4.5" cy="12" r="1.6" fill="currentColor"/><circle cx="4.5" cy="18" r="1.6" fill="currentColor"/></svg></span></span><div><b>Elenco</b>: apre la pagina con tutti i sentieri e i punti vicini e le impostazioni.</div></li>
             <li><span class="g-segno"><span class="g-fab"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span><div><b>Aggiorna</b>: riscarica subito i dati da OpenStreetMap.</div></li>
             <li><span class="g-segno"><span class="btn-help g-help">HELP</span></span><div><b>HELP</b> (in alto nella pagina Elenco, accanto alla X): apre questa pagina.</div></li>
@@ -228,19 +249,19 @@
           <p>In alto una riga dice cosa sta facendo l'app e quando sono stati scaricati i dati.</p>
           <dl class="g-def">
             <dt>AUTO-REFRESH</dt>
-            <dd>Ogni 30, 60 o 120 secondi l'app torna sulla tua posizione e ricalcola sentieri e punti vicini. <b>0</b> la spegne (all'inizio è spenta, per risparmiare batteria).
+            <dd>Ogni 30, 60 o 120 secondi l'app torna sulla tua posizione e ricalcola sentieri e punti vicini. <b>0</b> la spegne: a ogni avvio è spenta, così l'app riparte dall'<b>ultima posizione</b> guardata; tocca il pulsante della posizione per tornare su di te.
               Finché è attivo, il telefono non va in standby e lo schermo resta acceso (al centro della riga compare l'<b>occhio verde</b>).</dd>
             <dt>SUONI</dt>
             <dd>Un <b>bing</b> a ogni aggiornamento; <b>due note che scendono</b> se i dati non si possono scaricare.</dd>
             <dt>MAPPA</dt>
             <dd><b>Topografica</b> mostra curve di livello, cime e sentieri (OpenTopoMap); <b>Stradale</b> la cartina di OpenStreetMap, anche con i <b>nomi grandi</b>; <b>Satellite</b> le foto aeree.</dd>
             <dt>LETTURA VOCALE</dt>
-            <dd>Quando tocchi un sentiero o un segnaposto, l'app legge ad alta voce nome, difficoltà, lunghezza e distanza.</dd>
+            <dd>Quando tocchi un sentiero o un segnaposto, l'app legge ad alta voce nome, difficoltà, lunghezza e distanza. A ogni avvio è spenta.</dd>
           </dl>
           <p>Sotto trovi quanti sentieri ci sono nel raggio, quanti rifugi e bivacchi e quanto dista la fontanella più vicina,
             poi l'<b>elenco</b> ordinato <b>per distanza</b>, <b>per nome</b> o <b>per lunghezza</b>. <b>Solo sentieri CAI</b> nasconde
             i sentieri non gestiti dal CAI; <b>Rifugi aperti ora</b> nasconde i punti che non risultano aperti. Tocca una riga per vederla sulla mappa.</p>
-          <p>Le scelte restano memorizzate sul telefono.</p>
+          <p>Le altre scelte restano memorizzate sul telefono.</p>
         </section>
 
         <section id="g-dati">
@@ -278,9 +299,9 @@
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="config.js?v=10"></script>
-  <script src="core.js?v=8"></script>
-  <script src="app.js?v=10"></script>
+  <script src="config.js?v=13"></script>
+  <script src="core.js?v=13"></script>
+  <script src="app.js?v=13"></script>
 
   <!-- Statistiche d'uso anonime, senza cookie: https://trekking.goatcounter.com -->
   <script data-goatcounter="https://trekking.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>

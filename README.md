@@ -53,6 +53,7 @@ Impostazioni del repository → Pages → Source: **GitHub Actions**. A ogni mod
 - `app.js`: mappa, GPS, sentieri, elenco, impostazioni
 - `config.js`: impostazioni iniziali e numero di versione
 - `sw.js`, `manifest.webmanifest`: installazione come app
+- `installa.js`: riquadro «Metti Trekking sul telefono» (poco dopo l'avvio, solo se aperta nel browser; «Più tardi» lo nasconde per 5 giorni) e voce «Installa l'app» nella pagina Elenco. Android/Chrome: pulsante che apre l'installazione; iPhone: i passaggi di Safari; dentro WhatsApp/Facebook: come aprire la pagina nel browser
 - `aggiorna_sentieri.js`, `.github/workflows/pubblica.yml`: scaricamento settimanale della Lombardia e pubblicazione
 - `dati/`: sentieri e punti, creata da GitHub solo nel sito pubblicato (non sta nel repository)
 - `icon-*.png`, `favicon-64.png`, `apple-touch-icon.png`: logo Qui con le montagne

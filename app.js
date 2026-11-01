@@ -759,7 +759,7 @@
   }
 
   // ---------- Sentiero evidenziato ----------
-  // Il sentiero scelto resta evidenziato, intero, anche dopo aver chiuso la scheda; si toglie toccando la mappa.
+  // Il sentiero scelto resta evidenziato, intero, anche dopo aver chiuso la scheda; si toglie solo con Esci nel riquadro di navigazione.
   let evidenziato = null, scelto = null;
   function evidenzia(id) {
     if (evidenziato === id) return;
@@ -772,7 +772,10 @@
       if (su) { v.bordo.forEach((l) => l.bringToFront()); v.linee.forEach((l) => l.bringToFront()); }
     }
   }
-  function scegliSentiero(s) {
+  // Con un sentiero scelto si è "in navigazione": si esce solo con il pulsante Esci del riquadro (esci = true),
+  // non toccando la mappa né aprendo un punto. Scegliere un altro sentiero passa a quello.
+  function scegliSentiero(s, esci) {
+    if (!s && scelto && !esci) return;
     scelto = s || null;
     livelli.scelto.clearLayers();
     // non disegnato (fuori dalle difficoltà scelte o dai filtri): lo si disegna a parte
@@ -1025,10 +1028,17 @@
   function aggiornaGuida() {
     const box = $("guida-rotta");
     livelli.guida.clearLayers();
-    if (!scelto || !stato.gps) { box.hidden = true; return; }
+    if (!scelto) { box.hidden = true; return; }
+    box.hidden = false;
+    const g = stato.gps && QT.guidaSentiero(scelto, stato.gps.lat, stato.gps.lon, rottaMoto);
+    if (!g) {
+      $("guida-velocita").textContent = "– km/h";
+      $("guida-freccia").style.visibility = "hidden";
+      $("guida-testo").textContent = "Aspetto la posizione dal GPS…";
+      box.classList.remove("fuori");
+      return;
+    }
     const { lat, lon, acc } = stato.gps;
-    const g = QT.guidaSentiero(scelto, lat, lon, rottaMoto);
-    if (!g) { box.hidden = true; return; }
     const soglia = Math.max(25, Math.min(acc || 0, 60));
     const sopra = g.distanza <= soglia;
     const dir = sopra ? g.lungoSentiero : g.versoSentiero;
@@ -1040,12 +1050,14 @@
     $("guida-testo").textContent = sopra ? "Sei sul sentiero: segui la freccia" + card
       : "Sentiero a " + QT.formattaDistanza(g.distanza) + ": vai verso la freccia" + card;
     box.classList.toggle("fuori", !sopra);
-    box.hidden = false;
     if (!sopra) {
       L.polyline([[lat, lon], g.punto], { renderer: tela, color: "#2f7cf6", weight: 3, dashArray: "6 8", interactive: false }).addTo(livelli.guida);
       L.circleMarker(g.punto, { renderer: tela, radius: 6, color: "#fff", weight: 2, fillColor: "#2f7cf6", fillOpacity: 1, interactive: false }).addTo(livelli.guida);
     }
   }
+
+  $("guida-esci").addEventListener("click", (e) => { e.stopPropagation(); scegliSentiero(null, true); });
+  L.DomEvent.disableClickPropagation($("guida-rotta"));
 
   function suPosizione(p) {
     const { latitude: lat, longitude: lon, accuracy: acc } = p.coords;

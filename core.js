@@ -297,6 +297,53 @@
     return { punto: best, distanza: dmin };
   }
 
+  // ---------- Guida sul sentiero ----------
+  /** Rotta (gradi da nord, in senso orario) da (lat1, lon1) a (lat2, lon2). */
+  function rotta(lat1, lon1, lat2, lon2) {
+    const rad = Math.PI / 180;
+    const y = Math.sin((lon2 - lon1) * rad) * Math.cos(lat2 * rad);
+    const x = Math.cos(lat1 * rad) * Math.sin(lat2 * rad) - Math.sin(lat1 * rad) * Math.cos(lat2 * rad) * Math.cos((lon2 - lon1) * rad);
+    return (Math.atan2(y, x) / rad + 360) % 360;
+  }
+  /** Differenza tra due rotte, da 0 a 180 gradi. */
+  function scartoRotte(a, b) { const d = Math.abs(((a - b) % 360 + 360) % 360); return d > 180 ? 360 - d : d; }
+  const PUNTI_CARDINALI = ["N", "NE", "E", "SE", "S", "SO", "O", "NO"];
+  const puntoCardinale = (g) => PUNTI_CARDINALI[Math.round(((g % 360) + 360) % 360 / 45) % 8];
+  /**
+   * Dove andare per restare sul sentiero, da (lat, lon). "verso" = rotta in cui ti stai muovendo (o null).
+   * Proietta la posizione su ogni tratto della traccia (non solo sui vertici) e restituisce:
+   * distanza dal sentiero, punto più vicino, rotta verso quel punto e rotta lungo il sentiero
+   * (nel senso in cui stai camminando; senza "verso", nel senso in cui è disegnato).
+   */
+  function guidaSentiero(s, lat, lon, verso) {
+    const k = Math.PI / 180 * R_TERRA, c = Math.cos(lat * Math.PI / 180);
+    const xy = (p) => [(p[1] - lon) * c * k, (p[0] - lat) * k];
+    let best = null;
+    for (const l of s.g) {
+      if (l.length === 1) {
+        const [x, y] = xy(l[0]), d = Math.hypot(x, y);
+        if (!best || d < best.d) best = { d, p: l[0], a: null, b: null };
+        continue;
+      }
+      for (let i = 1; i < l.length; i++) {
+        const [ax, ay] = xy(l[i - 1]), [bx, by] = xy(l[i]);
+        const dx = bx - ax, dy = by - ay, q = dx * dx + dy * dy;
+        const t = q ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / q)) : 0;
+        const px = ax + t * dx, py = ay + t * dy, d = Math.hypot(px, py);
+        if (!best || d < best.d) best = { d, p: [lat + py / k, lon + px / (c * k)], a: l[i - 1], b: l[i] };
+      }
+    }
+    if (!best) return null;
+    let lungo = best.a ? rotta(best.a[0], best.a[1], best.b[0], best.b[1]) : null;
+    if (lungo != null && verso != null && isFinite(verso) && scartoRotte(lungo, verso) > 90) lungo = (lungo + 180) % 360;
+    return {
+      distanza: best.d,
+      punto: best.p,
+      versoSentiero: best.d > 0.5 ? rotta(lat, lon, best.p[0], best.p[1]) : lungo,
+      lungoSentiero: lungo
+    };
+  }
+
   // Estremità del sentiero (inizio e fine dei tratti), per "Portami all'attacco"
   function estremita(s) {
     return s.g.flatMap((l) => [l[0], l[l.length - 1]]);
@@ -669,7 +716,7 @@
   const API = {
     distanza, formattaDistanza, formattaKm, formattaQuota, formattaOre, DIFFICOLTA, ORDINE_DIFF, difficolta,
     TIPI, tipoDaTag, compatta, leggiSimbolo, svgSimbolo, SIMBOLO_CAI, unisciTratti, lunghezzaLinea, metriDaTag, minutiDaTag,
-    compattaSentiero, puntoPiuVicino, estremita, campioni, dislivello, tempoStimato, titoloSentiero, sottotitoloSentiero,
+    compattaSentiero, puntoPiuVicino, rotta, scartoRotte, puntoCardinale, guidaSentiero, estremita, campioni, dislivello, tempoStimato, titoloSentiero, sottotitoloSentiero,
     leggiOrari, statoApertura, testoApertura, orariLeggibili, riquadro, queryOverpass, leggiRisposta,
     preparaPunti, prepareSentieri, capitalizza, nomeTipo, titolo,
     daMercatore, tracciaWmt, capiPercorso, fileTraccia, nomeFile, FORMATI

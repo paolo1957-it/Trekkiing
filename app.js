@@ -101,6 +101,7 @@
     etichette: L.layerGroup().addTo(mappa),
     punti: L.layerGroup().addTo(mappa),
     scelto: L.layerGroup().addTo(mappa),   // sentiero scelto che non è tra quelli disegnati
+    guida: L.layerGroup().addTo(mappa),   // linea tratteggiata da te al sentiero scelto
     io: L.layerGroup().addTo(mappa)
   };
   const markerPerId = new Map();
@@ -758,7 +759,7 @@
   }
 
   // ---------- Sentiero evidenziato ----------
-  // Il sentiero scelto resta evidenziato, intero, anche dopo aver chiuso la scheda; si toglie toccando la mappa.
+  // Il sentiero scelto resta evidenziato, intero, anche dopo aver chiuso la scheda; si toglie solo con Esci nel riquadro di navigazione.
   let evidenziato = null, scelto = null;
   function evidenzia(id) {
     if (evidenziato === id) return;
@@ -771,7 +772,10 @@
       if (su) { v.bordo.forEach((l) => l.bringToFront()); v.linee.forEach((l) => l.bringToFront()); }
     }
   }
-  function scegliSentiero(s) {
+  // Con un sentiero scelto si è "in navigazione": si esce solo con il pulsante Esci del riquadro (esci = true),
+  // non toccando la mappa né aprendo un punto. Scegliere un altro sentiero passa a quello.
+  function scegliSentiero(s, esci) {
+    if (!s && scelto && !esci) return;
     scelto = s || null;
     livelli.scelto.clearLayers();
     // non disegnato (fuori dalle difficoltà scelte o dai filtri): lo si disegna a parte
@@ -781,6 +785,7 @@
     }
     evidenziato = undefined;
     evidenzia(s ? s.i : null);
+    aggiornaGuida();
   }
   mappa.on("click", () => scegliSentiero(null));
 
@@ -997,9 +1002,67 @@
     }
   }
 
+  // Velocità e rotta: dal GPS quando le dà, altrimenti dalle ultime due posizioni
+  let ultimaFix = null, velocita = null, rottaMoto = null;
+  function calcolaMoto(p) {
+    const { latitude: lat, longitude: lon, accuracy: acc, speed, heading } = p.coords;
+    const t = p.timestamp || Date.now();
+    let v = null;
+    if (speed != null && isFinite(speed) && speed >= 0) v = speed;
+    if (ultimaFix) {
+      const dt = (t - ultimaFix.t) / 1000, d = QT.distanza(ultimaFix.lat, ultimaFix.lon, lat, lon);
+      if (v == null && dt >= 1) v = d > Math.max(acc, ultimaFix.acc) / 2 ? d / dt : 0;
+      if (d >= Math.max(8, acc / 2)) rottaMoto = QT.rotta(ultimaFix.lat, ultimaFix.lon, lat, lon);
+    }
+    if (heading != null && isFinite(heading) && v != null && v > 0.5) rottaMoto = heading;
+    if (v != null) velocita = velocita == null ? v : velocita * 0.5 + v * 0.5;   // un po' smorzata
+    if (!ultimaFix || QT.distanza(ultimaFix.lat, ultimaFix.lon, lat, lon) >= Math.max(8, acc / 2) || t - ultimaFix.t > 15000) {
+      ultimaFix = { lat, lon, acc, t };
+    }
+  }
+
+  // ---------- Guida sul sentiero scelto: velocità e freccia ----------
+  // Con un sentiero scelto e il GPS acceso: in alto a sinistra la velocità e una freccia (nord in alto, come la mappa).
+  // Lontano dal sentiero la freccia punta al suo punto più vicino (con una linea tratteggiata sulla mappa);
+  // sul sentiero punta lungo il sentiero, nel senso in cui stai camminando.
+  function aggiornaGuida() {
+    const box = $("guida-rotta");
+    livelli.guida.clearLayers();
+    if (!scelto) { box.hidden = true; return; }
+    box.hidden = false;
+    const g = stato.gps && QT.guidaSentiero(scelto, stato.gps.lat, stato.gps.lon, rottaMoto);
+    if (!g) {
+      $("guida-velocita").textContent = "– km/h";
+      $("guida-freccia").style.visibility = "hidden";
+      $("guida-testo").textContent = "Aspetto la posizione dal GPS…";
+      box.classList.remove("fuori");
+      return;
+    }
+    const { lat, lon, acc } = stato.gps;
+    const soglia = Math.max(25, Math.min(acc || 0, 60));
+    const sopra = g.distanza <= soglia;
+    const dir = sopra ? g.lungoSentiero : g.versoSentiero;
+    const kmh = velocita == null ? null : velocita * 3.6;
+    $("guida-velocita").textContent = kmh == null ? "– km/h" : (kmh < 0.5 ? "0" : kmh.toFixed(1).replace(".", ",")) + " km/h";
+    $("guida-freccia").style.transform = "rotate(" + Math.round(dir || 0) + "deg)";
+    $("guida-freccia").style.visibility = dir == null ? "hidden" : "visible";
+    const card = dir == null ? "" : " (" + QT.puntoCardinale(dir) + ")";
+    $("guida-testo").textContent = sopra ? "Sei sul sentiero: segui la freccia" + card
+      : "Sentiero a " + QT.formattaDistanza(g.distanza) + ": vai verso la freccia" + card;
+    box.classList.toggle("fuori", !sopra);
+    if (!sopra) {
+      L.polyline([[lat, lon], g.punto], { renderer: tela, color: "#2f7cf6", weight: 3, dashArray: "6 8", interactive: false }).addTo(livelli.guida);
+      L.circleMarker(g.punto, { renderer: tela, radius: 6, color: "#fff", weight: 2, fillColor: "#2f7cf6", fillOpacity: 1, interactive: false }).addTo(livelli.guida);
+    }
+  }
+
+  $("guida-esci").addEventListener("click", (e) => { e.stopPropagation(); scegliSentiero(null, true); });
+  L.DomEvent.disableClickPropagation($("guida-rotta"));
+
   function suPosizione(p) {
     const { latitude: lat, longitude: lon, accuracy: acc } = p.coords;
     stato.gps = { lat, lon, acc };
+    calcolaMoto(p);
     if (!marcatoreIo) {
       marcatoreIo = L.marker([lat, lon], { icon: L.divIcon({ className: "", html: '<div class="io"></div>', iconSize: [18, 18] }), zIndexOffset: 3000, interactive: false }).addTo(livelli.io);
       cerchioPrecisione = L.circle([lat, lon], { radius: acc, color: "#2f7cf6", weight: 0, fillOpacity: .12, interactive: false }).addTo(livelli.io);
@@ -1008,6 +1071,7 @@
       cerchioPrecisione.setLatLng([lat, lon]).setRadius(acc);
     }
     if (stato.seguiGps) impostaCentro(lat, lon, true);
+    aggiornaGuida();
   }
 
   function erroreGps(e) {

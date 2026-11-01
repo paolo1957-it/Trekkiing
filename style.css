@@ -120,6 +120,28 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .mappa { position: absolute; inset: 0; background: var(--bg); }
 .versione { margin: 0; font-size: 12px; color: var(--testo-2); }
 
+/* Velocità e freccia per restare sul sentiero scelto */
+.guida-rotta {
+  position: absolute; left: 12px; top: 12px; z-index: 900; max-width: calc(100% - 88px);
+  display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 8px;
+  border-radius: var(--r); background: var(--superficie); color: var(--testo); box-shadow: var(--ombra);
+}
+.guida-rotta[hidden] { display: none; }
+.gr-bussola {
+  position: relative; flex: none; width: 58px; height: 58px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--bg); color: var(--libero);
+}
+.guida-rotta.fuori .gr-bussola { color: #2f7cf6; }
+.gr-nord { position: absolute; top: 1px; left: 50%; transform: translateX(-50%); font: 700 10px/1 var(--font-body); color: var(--testo-2); }
+.gr-freccia { transition: transform .4s ease-out; }
+.gr-testi { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.gr-testi b { font: 700 24px/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.gr-esci {
+  flex: none; align-self: center; margin-left: 4px; min-height: 40px; padding: 0 14px; border-radius: 999px;
+  border: 2px solid var(--pieno); background: var(--superficie); color: var(--pieno); font: 700 16px/1 var(--font-display);
+}
+.gr-testi span { font-size: 14px; line-height: 1.25; color: var(--testo-2); }
+
 .fab-col {
   position: absolute; right: 16px; top: 16px; z-index: 900;
   display: flex; flex-direction: column; align-items: center; gap: 12px;

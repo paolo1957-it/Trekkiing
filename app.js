@@ -1064,7 +1064,7 @@
     stato.gps = { lat, lon, acc };
     calcolaMoto(p);
     if (!marcatoreIo) {
-      marcatoreIo = L.marker([lat, lon], { icon: L.divIcon({ className: "", html: '<div class="io"></div>', iconSize: [18, 18] }), zIndexOffset: 3000, interactive: false }).addTo(livelli.io);
+      marcatoreIo = L.marker([lat, lon], { icon: L.divIcon({ className: "", html: '<div class="io-box"><div class="io-cono" hidden></div><div class="io"></div></div>', iconSize: [18, 18] }), zIndexOffset: 3000, interactive: false }).addTo(livelli.io);
       cerchioPrecisione = L.circle([lat, lon], { radius: acc, color: "#2f7cf6", weight: 0, fillOpacity: .12, interactive: false }).addTo(livelli.io);
     } else {
       marcatoreIo.setLatLng([lat, lon]);
@@ -1072,6 +1072,63 @@
     }
     if (stato.seguiGps) impostaCentro(lat, lon, true);
     aggiornaGuida();
+    disegnaCono();
+  }
+
+  // ---------- Cono dell'orientamento sul pallino azzurro ----------
+  // Come in Google Maps, ma lungo il doppio: punta dove è rivolto il telefono (bussola).
+  // Android: evento deviceorientationabsolute, senza permessi. iPhone: serve il permesso «Movimento e orientamento»,
+  // chiesto al tocco del pulsante della posizione (e poi al primo tocco, se già concesso una volta).
+  // Senza bussola, mentre cammini il cono segue la direzione di marcia del GPS.
+  let bussola = null, bussolaT = 0, conoFrame = 0;
+  function angoloSchermo() {
+    const o = screen.orientation && screen.orientation.angle;
+    return isFinite(o) ? o : (isFinite(window.orientation) ? +window.orientation : 0);
+  }
+  function suBussola(e) {
+    let h = null;
+    if (e.webkitCompassHeading != null && isFinite(e.webkitCompassHeading)) h = e.webkitCompassHeading + angoloSchermo();
+    else if ((e.absolute || e.type === "deviceorientationabsolute") && e.alpha != null && isFinite(e.alpha)) h = 360 - e.alpha + angoloSchermo();
+    if (h == null) return;
+    h = ((h % 360) + 360) % 360;
+    // smorzata, tenendo conto del passaggio 359° → 0°
+    if (bussola == null) bussola = h;
+    else bussola = (bussola + ((((h - bussola) % 360) + 540) % 360 - 180) * 0.3 + 360) % 360;
+    bussolaT = Date.now();
+    if (!conoFrame) conoFrame = requestAnimationFrame(() => { conoFrame = 0; disegnaCono(); });
+  }
+  function disegnaCono() {
+    const cono = marcatoreIo && marcatoreIo.getElement() && marcatoreIo.getElement().querySelector(".io-cono");
+    if (!cono) return;
+    let dir = Date.now() - bussolaT < 3000 ? bussola : null;
+    if (dir == null && velocita != null && velocita > 0.5 && rottaMoto != null) dir = rottaMoto;
+    cono.hidden = dir == null;
+    if (dir != null) cono.style.transform = "rotate(" + Math.round(dir) + "deg)";
+  }
+  function avviaBussola(chiedi) {
+    const D = window.DeviceOrientationEvent;
+    if (!D) return;
+    if ("ondeviceorientationabsolute" in window) {
+      // Android (Chrome, Samsung…): la bussola arriva senza chiedere niente
+      window.addEventListener("deviceorientationabsolute", suBussola, true);
+    } else if (typeof D.requestPermission === "function") {
+      if (!chiedi) return;
+      D.requestPermission().then((r) => {
+        if (r !== "granted") return;
+        salvaPref("bussola", "1");
+        window.addEventListener("deviceorientation", suBussola, true);
+      }).catch(() => {});
+    } else {
+      window.addEventListener("deviceorientation", suBussola, true);
+    }
+  }
+  avviaBussola(false);
+  const bussolaIphone = !("ondeviceorientationabsolute" in window) && window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === "function";
+  if (bussolaIphone) {
+    let chiesta = false;
+    const alTocco = () => { if (!chiesta) { chiesta = true; avviaBussola(true); } };
+    $("btn-centra").addEventListener("click", alTocco);
+    if (leggiPref("bussola", "0") === "1") document.addEventListener("touchend", alTocco, { once: true, passive: true });
   }
 
   function erroreGps(e) {

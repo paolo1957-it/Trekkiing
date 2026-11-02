@@ -36,6 +36,7 @@
     condividi: '<svg class="ins-ico" viewBox="0 0 24 24" width="22" height="22" aria-label="Condividi"><path d="M12 3v12M7.5 7.5 12 3l4.5 4.5" fill="none" stroke="#1a73e8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 10H6v11h12V10h-2" fill="none" stroke="#1a73e8" stroke-width="2" stroke-linejoin="round"/></svg>',
     piu: '<svg class="ins-ico" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 8v8M8 12h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
     puntini: '<svg class="ins-ico" viewBox="0 0 24 24" width="22" height="22" aria-label="tre puntini"><circle cx="12" cy="5" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="19" r="2" fill="currentColor"/></svg>',
+    righe: '<svg class="ins-ico" viewBox="0 0 24 24" width="22" height="22" aria-label="tre righe"><path d="M4 6.5h16M4 12h16M4 17.5h11" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
     puntiniOr: '<svg class="ins-ico" viewBox="0 0 24 24" width="22" height="22" aria-label="tre puntini"><circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/></svg>'
   };
   const passi = (lista) => '<ol class="ins-passi">' + lista.map((p) => "<li>" + p + "</li>").join("") + "</ol>";
@@ -66,7 +67,7 @@
     if (ios) {
       return {
         html: passi([
-          "Tocca " + ICONA.condividi + " <b>Condividi</b> nella barra di Safari (in basso, o in alto sull'iPad). Se non lo vedi, tocca prima " + ICONA.puntiniOr + ".",
+          "Tocca " + ICONA.condividi + " <b>Condividi</b> nella barra di Safari (in basso, o in alto sull'iPad). Se non lo vedi, tocca prima " + ICONA.righe + " a sinistra dell'indirizzo.",
           "Scorri e tocca " + ICONA.piu + " <b>Aggiungi alla schermata Home</b>.",
           "Tocca <b>Aggiungi</b> in alto a destra: l'icona verde di Trekking compare sulla schermata Home."
         ]),
@@ -92,6 +93,8 @@
   let azione = chiudi;
   function apri() {
     const c = contenuto();
+    // Su Android il browser parla di «Installa app»: usiamo la stessa parola
+    $("installa-titolo").textContent = (android ? "Installa" : "Metti") + " Trekking sul telefono";
     corpo.innerHTML = c.html;
     ok.textContent = c.pulsante;
     azione = c.azione;

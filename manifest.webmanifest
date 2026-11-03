@@ -1,6 +1,6 @@
 {
   "name": "Qui-Trekking",
-  "short_name": "Trekking",
+  "short_name": "Qui-Trekking",
   "description": "Sentieri CAI con difficoltà, lunghezza e dislivello, rifugi e fontanelle vicino a te, da OpenStreetMap",
   "lang": "it",
   "start_url": "./",

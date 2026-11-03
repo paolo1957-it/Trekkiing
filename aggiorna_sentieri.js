@@ -31,7 +31,7 @@ const ORE_VALIDI = 6 * 24;   // i dati pubblicati da meno di 6 giorni non si ris
 // Da aumentare quando cambia il formato dei file: i dati pubblicati con un'altra versione si riscaricano subito
 const VERSIONE_DATI = 2;
 const CARTELLA = path.join(__dirname, "dati");
-const USER_AGENT = "Qui-Trekking/1.0 (https://github.com/paolo1957-it/Trekkiing)";
+const USER_AGENT = "Qui-Trekking/1.0 (https://github.com/quivicino/Trekking)";
 const SERVER = [
   "https://overpass.private.coffee/api/interpreter",
   "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
@@ -175,7 +175,7 @@ function salva(raccolta, zona) {
     fonte: "© OpenStreetMap contributors (ODbL)",
     licenza: "Open Database License (ODbL) 1.0",
     licenzaUrl: "https://opendatacommons.org/licenses/odbl/1-0/",
-    generatoDa: "https://github.com/paolo1957-it/Trekkiing"
+    generatoDa: "https://github.com/quivicino/Trekking"
   };
   scriviIndice(indice);
   console.log(`Salvati ${nSentieri} sentieri e ${raccolta.punti.size} punti in ${tessere.size} tessere (${(byte / 1048576).toFixed(1)} MB)`);

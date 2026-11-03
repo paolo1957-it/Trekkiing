@@ -670,7 +670,7 @@
     const diff = QT.DIFFICOLTA[s.d];
     const dati = [diff.sigla !== "?" ? diff.nome : "", QT.formattaKm(s.l), s.su != null ? "↗ " + s.su + " m" : ""].filter(Boolean).join(", ");
     return "https://wa.me/?text=" + encodeURIComponent(
-      `Guarda questo sentiero su Trekking: ${QT.titoloSentiero(s)}${dati ? " (" + dati + ")" : ""}. ` + linkCondiviso(s));
+      `Guarda questo sentiero su Qui-Trekking: ${QT.titoloSentiero(s)}${dati ? " (" + dati + ")" : ""}. ` + linkCondiviso(s));
   }
 
   // ---------- Dislivello dalle quote del terreno ----------
@@ -1279,7 +1279,7 @@
   // Condividi su WhatsApp: messaggio già scritto con il link all'app (?ref=whatsapp per GoatCounter)
   const linkApp = location.origin + location.pathname + "?ref=whatsapp";
   $("btn-condividi").href = "https://wa.me/?text=" + encodeURIComponent(
-    "Ti consiglio Trekking: trovi sentieri CAI con difficoltà, lunghezza e dislivello, rifugi e fontanelle vicino a te. " +
+    "Ti consiglio Qui-Trekking: trovi sentieri CAI con difficoltà, lunghezza e dislivello, rifugi e fontanelle vicino a te. " +
     "Gratis e senza registrazione: " + linkApp);
   $("btn-condividi").addEventListener("click", () => {
     if (window.goatcounter && window.goatcounter.count) window.goatcounter.count({ path: "condividi-whatsapp", title: "Condividi su WhatsApp", event: true });

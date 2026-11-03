@@ -1,7 +1,7 @@
 # Qui-Trekking
 
 Web app per il telefono che mostra i **sentieri** vicino a te, con lo stesso aspetto e funzionamento di
-[Qui-Pets](https://github.com/paolo1957-it/Pets) e [Distributori](https://github.com/paolo1957-it/Distributori):
+[Qui-Pets](https://github.com/quivicino/Pets) e [Distributori](https://github.com/quivicino/Distributori):
 
 - sentieri escursionistici di OpenStreetMap (relazioni `route=hiking`), colorati secondo la **difficoltà CAI**
   (`cai_scale`: T, E, EE, EEA, EAI; se manca, `sac_scale` convertita), con **numero** (`ref`) e **segnavia**
@@ -43,7 +43,7 @@ Web app per il telefono che mostra i **sentieri** vicino a te, con lo stesso asp
 ## Pubblicazione
 
 Impostazioni del repository → Pages → Source: **GitHub Actions**. A ogni modifica su `main` il workflow
-`.github/workflows/pubblica.yml` pubblica il sito su `https://paolo1957-it.github.io/Trekkiing/`.
+`.github/workflows/pubblica.yml` pubblica il sito su `https://quivicino.github.io/Trekking/`.
 
 ## File
 
@@ -53,7 +53,7 @@ Impostazioni del repository → Pages → Source: **GitHub Actions**. A ogni mod
 - `app.js`: mappa, GPS, sentieri, elenco, impostazioni
 - `config.js`: impostazioni iniziali e numero di versione
 - `sw.js`, `manifest.webmanifest`: installazione come app
-- `installa.js`: riquadro «Metti Trekking sul telefono» (poco dopo l'avvio, solo se aperta nel browser; «Più tardi» lo nasconde per 5 giorni) e voce «Installa l'app» nella pagina Elenco. Android/Chrome: pulsante che apre l'installazione; iPhone: i passaggi di Safari; dentro WhatsApp/Facebook: come aprire la pagina nel browser
+- `installa.js`: riquadro «Metti Qui-Trekking sul telefono» (poco dopo l'avvio, solo se aperta nel browser; «Più tardi» lo nasconde per 5 giorni) e voce «Installa l'app» nella pagina Elenco. Android/Chrome: pulsante che apre l'installazione; iPhone: i passaggi di Safari; dentro WhatsApp/Facebook: come aprire la pagina nel browser
 - `aggiorna_sentieri.js`, `.github/workflows/pubblica.yml`: scaricamento settimanale della Lombardia e pubblicazione
 - `dati/`: sentieri e punti, creata da GitHub solo nel sito pubblicato (non sta nel repository)
 - `icon-*.png`, `favicon-64.png`, `apple-touch-icon.png`: logo Qui con le montagne

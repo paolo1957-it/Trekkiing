@@ -439,6 +439,7 @@
   }
 
   const BOTTONE_MAPPA = '<button type="button" class="pop-vai pop-mappa">Vedi sulla mappa</button>';
+  const BOTTONE_CAMMINA = '<button type="button" class="pop-vai pop-mappa">Cammina sul sentiero</button>';
 
   function popupPunto(d) {
     const tit = QT.titolo(d);
@@ -534,9 +535,9 @@
     voce.push("Il punto più vicino è a " + distanzaParlata(s.distanza) + ".");
     righe.push(`<p class="fonte">Fonte: <a href="https://www.openstreetmap.org/relation/${attr(s.i.slice(1))}" target="_blank" rel="noopener">OpenStreetMap</a>` + (s.su == null ? "; quote: Copernicus DEM (Open-Meteo)" : "") + "</p>");
     const a = attacco(s);
-    const pulsanti = [`<a class="pop-vai" href="${linkNavigazione(a[0], a[1])}" target="_blank" rel="noopener">Portami all'attacco</a>`, BOTTONE_MAPPA];
+    const pulsanti = [`<a class="pop-vai" href="${linkNavigazione(a[0], a[1])}" target="_blank" rel="noopener">In auto al sentiero</a>`, BOTTONE_CAMMINA];
     const sv = streetView(s);
-    const invia = `<a class="pop-vai pop-whatsapp" href="${attr(linkWhatsApp(s))}" target="_blank" rel="noopener">${ICONA_WA}Invia a un amico con WhatsApp</a>`;
+    const invia = `<a class="pop-vai pop-whatsapp" href="${attr(linkWhatsApp(s))}" target="_blank" rel="noopener">${ICONA_WA}Invia Sentiero con WhatsApp</a>`;
     const waymarked = `<a class="pop-link" href="https://hiking.waymarkedtrails.org/#route?id=${attr(s.i.slice(1))}" target="_blank" rel="noopener">Profilo e dettagli su Waymarked Trails</a>`;
     const testa = `<div class="pop-testa">${segnavia(s, 30)}<h3>${esc(tit)}</h3></div>`;
     return `<div class="pop pop-sentiero" data-voce="${attr(voce.join(" "))}" data-sentiero="${attr(s.i)}">${testa}${righe.join("")}
@@ -649,7 +650,7 @@
     const vai = (p, testo) => `<a class="pop-vai pop-sv" href="${attr(linkStreetView(p))}" target="_blank" rel="noopener">${ICONA_SV}${esc(testo)}</a>`;
     const due = max > 150;
     return `<div class="pop-streetview"><b>Street View agli estremi</b><div class="pop-pulsanti">` +
-      (due ? vai(a, "Estremo più vicino") + vai(b, "Altro estremo") : vai(a, s.anello ? "Partenza e arrivo" : "Estremo")) + `</div></div>`;
+      (due ? vai(a, "Estremo più vicino") + vai(b, "Estremo più lontano") : vai(a, s.anello ? "Partenza e arrivo" : "Estremo")) + `</div></div>`;
   }
   const ICONA_SV = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="5" r="2.6" fill="currentColor"/><path d="M9.5 9h5l.8 6h-1.8l-.5 5h-2l-.5-5H8.7Z" fill="currentColor"/><ellipse cx="12" cy="20.5" rx="8" ry="2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
 
@@ -789,6 +790,30 @@
   }
   mappa.on("click", () => scegliSentiero(null));
 
+  // ---------- Anteprima: toccando un sentiero sulla mappa ----------
+  // Un fumetto con il segnavia e il nome, e il sentiero evidenziato; toccando il fumetto si apre la scheda,
+  // toccando un punto vuoto della mappa il fumetto si chiude e torna la mappa com'era.
+  let anteprima = null, anteprimaId = null;
+  function apriAnteprima(s, dove) {
+    const div = document.createElement("div");
+    div.className = "anteprima";
+    div.setAttribute("role", "button");
+    div.tabIndex = 0;
+    div.innerHTML = `${segnavia(s, 30)}<span class="ant-nome">${esc(QT.titoloSentiero(s))}</span><span class="ant-vai" aria-hidden="true">›</span>`;
+    const apri = () => { chiudiAnteprima(); mostraSentiero(s); };
+    div.addEventListener("click", (e) => { e.stopPropagation(); apri(); });
+    div.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); apri(); } });
+    L.DomEvent.disableClickPropagation(div);
+    chiudiAnteprima();
+    evidenziato = undefined;
+    evidenzia(s.i);
+    anteprima = L.popup({ closeButton: false, autoPan: true, className: "pop-anteprima", maxWidth: 300, offset: [0, -4] })
+      .setLatLng(dove).setContent(div).openOn(mappa);
+    anteprimaId = s.i;
+    anteprima.on("remove", () => { anteprima = null; anteprimaId = null; evidenziato = undefined; evidenzia(scelto ? scelto.i : null); });
+  }
+  function chiudiAnteprima() { if (anteprima) mappa.closePopup(anteprima); }
+
   // ---------- Scheda: la terza pagina, dopo la mappa e l'elenco ----------
   const schedaAperta = () => !$("scheda").hidden;
   function apriScheda(html, titolo, s) {
@@ -851,12 +876,13 @@
     for (const s of sentieri) {
       const colore = coloreDiff(s.d);
       const apri = () => mostraSentiero(s);
+      const tocca = (e) => apriAnteprima(s, e.latlng);
       const bordo = s.g.map((l) => L.polyline(l, { renderer: tela, color: "#ffffff", weight: 7.5, opacity: .85, interactive: false }).addTo(livelli.sentieri));
       const linee = s.g.map((l) => L.polyline(l, {
         renderer: tela, color: colore, weight: 4.5, opacity: 1, lineCap: "round", lineJoin: "round",
         dashArray: s.d === "EEA" ? "10 6" : s.d === "ND" ? "2 7" : null,
         bubblingMouseEvents: false   // il tocco sulla linea non arriva alla mappa (che toglierebbe l'evidenziato)
-      }).on("click", apri).addTo(livelli.sentieri));
+      }).on("click", tocca).addTo(livelli.sentieri));
       // segnavia col numero a metà del tratto più lungo
       let etichetta = null;
       if (s.r || s.sim) {
@@ -865,11 +891,12 @@
         etichetta = L.marker(m, {
           icon: L.divIcon({ className: "", html: `<div class="lbl-sentiero">${segnavia(s, 22)}</div>`, iconSize: null, iconAnchor: [14, 11] }),
           title: QT.titoloSentiero(s), zIndexOffset: -500
-        }).on("click", apri).addTo(livelli.etichette);
+        }).on("click", tocca).addTo(livelli.etichette);
       }
       lineePerId.set(s.i, { linee, bordo, etichetta, apri });
     }
     if (scelto) scegliSentiero(stato.viciniS.find((x) => x.i === scelto.i) || scelto);
+    if (anteprimaId) { evidenziato = undefined; evidenzia(anteprimaId); }   // il fumetto aperto resta evidenziato
 
     const daMostrare = stato.viciniP.slice().sort((a, b) => a.distanza - b.distanza).slice(0, cfg.maxSegnaposto || 800);
     for (const d of daMostrare) {

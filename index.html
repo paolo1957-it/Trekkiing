@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="style.css?v=21">
+  <link rel="stylesheet" href="style.css?v=22">
 </head>
 <body>
   <div class="app">
@@ -173,7 +173,8 @@
         <footer class="fonti">
           Dati: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> e chi contribuisce
           (licenza ODbL); mappa topografica © <a href="https://opentopomap.org" target="_blank" rel="noopener">OpenTopoMap</a> (CC-BY-SA);
-          quote del terreno da <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> (Copernicus DEM).
+          quote del terreno da <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> (Copernicus DEM);
+          percorribilità e tempi dal <a href="https://osm2cai.cai.it" target="_blank" rel="noopener">Catasto sentieri CAI</a> (OSM2CAI).
           Le informazioni sono inserite da volontari e possono essere incomplete o non aggiornate: prima di partire controlla
           meteo, stato dei sentieri e apertura dei rifugi. Se trovi un errore puoi correggerlo su OpenStreetMap.
         </footer>
@@ -234,7 +235,12 @@
           <p><b>Invia Sentiero con WhatsApp</b> manda un link: chi lo apre vede Qui-Trekking con la stessa mappa, lo stesso raggio,
             le stesse scelte di cosa mostrare e la scheda dello stesso sentiero.</p>
           <p>Il <b>dislivello</b> e il <b>tempo</b> sono quelli scritti su OpenStreetMap; quando mancano l'app li calcola
-            dalle quote del terreno (indicati come <i>stima</i>). Il tempo stimato è per un escursionista medio, senza soste.</p>
+            dalle quote del terreno (indicati come <i>stima</i>). Il tempo stimato è per un escursionista medio, senza soste.
+            Se il sentiero è nel Catasto sentieri del CAI si mostrano i <b>tempi CAI</b>, all'andata e al ritorno.</p>
+          <p>La <b>percorribilità</b> viene dal Catasto sentieri del CAI: nella scheda c'è un riquadro verde (percorribile),
+            arancione (percorribile in parte) o rosso (non percorribile), con la nota e la data della segnalazione.
+            Sulla mappa i sentieri non percorribili o interrotti hanno un <span class="avviso-cai cai-no" style="display:inline-grid;vertical-align:middle;width:18px;height:18px;font-size:12px">!</span>.
+            Le segnalazioni possono non essere aggiornate: prima di partire informati sul posto.</p>
         </section>
 
         <section id="g-mappa">
@@ -291,6 +297,8 @@
             <li>Sentieri, rifugi e fontanelle vengono da <b>OpenStreetMap</b>. Per tutta la <b>Lombardia</b> (e 15 km oltre i confini)
               ogni lunedì il sito li scarica e li tiene pronti: lì l'app è veloce e non dipende dai server di OpenStreetMap.
               Fuori dalla Lombardia l'app li chiede ogni volta a OpenStreetMap, e può volerci più di un minuto.</li>
+            <li>Percorribilità, tempi e dislivelli dei sentieri accatastati vengono dal <b>Catasto sentieri CAI</b>
+              (<a href="https://osm2cai.cai.it" target="_blank" rel="noopener">OSM2CAI</a>), anche questi aggiornati ogni lunedì, solo per la Lombardia.</li>
             <li>Gli ultimi dati scaricati restano sul telefono: se in montagna non c'è campo, l'app usa quelli.</li>
             <li>La <b>difficoltà</b> è quella indicata dal CAI (tag <i>cai_scale</i>); se manca si usa la scala svizzera convertita. Se non c'è nessuna delle due il sentiero è grigio.</li>
             <li>Il <b>segnavia</b> è quello descritto su OpenStreetMap (tag <i>osmc:symbol</i>); per i sentieri CAI senza descrizione si mostra il classico bianco e rosso.</li>
@@ -335,9 +343,9 @@
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="config.js?v=21"></script>
+  <script src="config.js?v=22"></script>
   <script src="core.js?v=17"></script>
-  <script src="app.js?v=21"></script>
+  <script src="app.js?v=22"></script>
   <script src="installa.js?v=20"></script>
 
   <!-- Statistiche d'uso anonime, senza cookie: https://trekking.goatcounter.com

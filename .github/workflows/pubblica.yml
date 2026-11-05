@@ -42,6 +42,15 @@ jobs:
           FORZA: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}
         run: node aggiorna_sentieri.js
 
+      # Percorribilità, note e tempi del Catasto sentieri CAI (OSM2CAI). Si chiedono solo i sentieri
+      # cambiati; se il CAI non risponde resta il file della volta prima.
+      - name: Percorribilità e tempi dal Catasto sentieri CAI
+        timeout-minutes: 60    # lo script si ferma da solo dopo 45 minuti e salva quello che ha
+        continue-on-error: true
+        env:
+          SITO: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+        run: node aggiorna_cai.js
+
       - uses: actions/configure-pages@v6
 
       - uses: actions/upload-pages-artifact@v5

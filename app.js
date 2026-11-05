@@ -175,6 +175,22 @@
       clearTimeout(t);
     }
   }
+  // ---------- Catasto sentieri CAI (OSM2CAI) ----------
+  // Percorribilità (con nota e data della segnalazione), tempi e dislivelli del CAI, scaricati il lunedì
+  // con gli altri dati. Chiave: numero della relazione OpenStreetMap. Se il file non c'è, se ne fa a meno.
+  let cai = {};
+  const datoCai = (s) => (s && s.i && s.i[0] === "r" ? cai[s.i.slice(1)] : null);
+  const PERCORRIBILITA = { ok: "Percorribile", parz: "Percorribile in parte", no: "Non percorribile" };
+  const avvisoCai = (s) => { const c = datoCai(s); return c && (c.s === "no" || c.s === "parz") ? c.s : null; };
+  function boxCai(c) {
+    const quando = c.d ? " · segnalazione del " + c.d.split("-").reverse().join("/") : "";
+    return `<div class="cai-stato cai-${c.s}"><b>${c.s === "ok" ? "✓" : "⚠"} ${PERCORRIBILITA[c.s]}</b>` +
+      `<span>secondo il Catasto sentieri CAI${quando}</span>${c.n ? `<p>${esc(c.n)}</p>` : ""}</div>`;
+  }
+  fetchJson("dati/cai.json", {}, 30000)
+    .then((d) => { cai = (d && d.sentieri) || {}; if (stato.centro) render(); })
+    .catch(() => {});
+
 
   // ---------- Memoria sul telefono (IndexedDB): ultimi dati scaricati, quote dei sentieri, foto ----------
   const Memoria = (() => {
@@ -488,10 +504,13 @@
   // Sentiero ritagliato sulla zona ("parz"): senza i tag di OpenStreetMap, lunghezza, dislivello e tempo
   // si possono calcolare solo per il tratto in zona, e lo si dice.
   function numeriSentiero(s, q) {
-    const daTag = s.su != null;
-    const su = daTag ? s.su : q && q.su, giu = daTag ? s.giu : q && q.giu;
+    const c = datoCai(s);
+    const daCai = s.su == null && !!c && c.su != null;
+    const daTag = s.su != null || daCai;
+    const su = s.su != null ? s.su : daCai ? c.su : q && q.su;
+    const giu = s.su != null ? s.giu : daCai ? (c.giu != null ? c.giu : null) : q && q.giu;
     const zona = s.parz ? ", tratto in zona" : "";
-    const stima = !daTag && q ? " <i>stima" + zona + "</i>" : "";
+    const stima = !daTag && q ? " <i>stima" + zona + "</i>" : daCai ? " (CAI)" : "";
     const lung = s.parz && !s.lt ? ["≥ " + QT.formattaKm(s.l), "lunghezza (qui solo il tratto in zona)"]
       : [QT.formattaKm(s.l), "lunghezza" + (s.anello ? " (ad anello)" : s.parz ? " totale" : "")];
     const caselle = [lung];
@@ -502,8 +521,14 @@
     else caselle.push(["…", "dislivello: calcolo"]);
     if (q && q.max != null) caselle.push([`${q.min}–${QT.formattaQuota(q.max)}`, "quota min–max" + zona]);
     // con il dislivello stimato sul tratto in zona, anche il tempo vale per quel tratto
-    const min = s.t || (su != null ? QT.tempoStimato(daTag ? s.l : s.lv || s.l, su, giu) : null);
-    if (min) caselle.push([QT.formattaOre(min), s.t ? "tempo indicato" : "tempo <i>stima" + (daTag ? "" : zona) + "</i>"]);
+    if (c && c.af) {
+      // tempi del Catasto CAI: andata (da partenza ad arrivo) e ritorno
+      caselle.push([QT.formattaOre(c.af), "tempo CAI" + (c.ar && c.ar !== c.af ? " andata" : "")]);
+      if (c.ar && c.ar !== c.af) caselle.push([QT.formattaOre(c.ar), "tempo CAI ritorno"]);
+    } else {
+      const min = s.t || (su != null ? QT.tempoStimato(daTag ? s.l : s.lv || s.l, su, giu) : null);
+      if (min) caselle.push([QT.formattaOre(min), s.t ? "tempo indicato" : "tempo <i>stima" + (daTag ? "" : zona) + "</i>"]);
+    }
     return caselle.map(([b, t]) => `<div><b>${b}</b><span>${t}</span></div>`).join("");
   }
 
@@ -527,13 +552,19 @@
     if (sotto && sotto !== tit) righe.push(`<p class="pop-tipo">${esc(sotto)}</p>`);
     righe.push(`<div class="pop-diff">${pastiglia(s.d, true)}<span>${esc(diff.nome)}</span></div>`);
     righe.push(`<p class="pop-spiega">${esc(diff.spiega)}</p>`);
+    const c = datoCai(s);
+    if (c && c.s) {
+      righe.push(boxCai(c));
+      voce.push(PERCORRIBILITA[c.s] + " secondo il CAI." + (c.n ? " " + c.n : ""));
+    }
     righe.push(`<div class="pop-num" data-num="${attr(s.i)}">${numeriSentiero(s, q)}</div>`);
     righe.push(`<div class="pop-profilo" data-prof="${attr(s.i)}">${profiloSvg(q)}</div>`);
     if (s.o) righe.push(`<p>Gestito da ${esc(s.o)}</p>`);
     if (s.nota) righe.push(`<p>${esc(s.nota)}</p>`);
     righe.push(`<p>Il punto più vicino è a ${QT.formattaDistanza(s.distanza)} in linea d'aria</p>`);
     voce.push("Il punto più vicino è a " + distanzaParlata(s.distanza) + ".");
-    righe.push(`<p class="fonte">Fonte: <a href="https://www.openstreetmap.org/relation/${attr(s.i.slice(1))}" target="_blank" rel="noopener">OpenStreetMap</a>` + (s.su == null ? "; quote: Copernicus DEM (Open-Meteo)" : "") + "</p>");
+    righe.push(`<p class="fonte">Fonte: <a href="https://www.openstreetmap.org/relation/${attr(s.i.slice(1))}" target="_blank" rel="noopener">OpenStreetMap</a>` + (s.su == null && !(c && c.su != null) ? "; quote: Copernicus DEM (Open-Meteo)" : "") +
+      (c ? `; percorribilità e tempi: <a href="https://osm2cai.cai.it/hiking-route/id/${attr(c.id)}" target="_blank" rel="noopener">Catasto sentieri CAI</a>` : "") + "</p>");
     const a = attacco(s);
     const pulsanti = [`<a class="pop-vai" href="${linkNavigazione(a[0], a[1])}" target="_blank" rel="noopener">In auto al sentiero</a>`, BOTTONE_CAMMINA];
     const sv = streetView(s);
@@ -790,6 +821,7 @@
   }
   mappa.on("click", () => scegliSentiero(null));
 
+
   // ---------- Anteprima: toccando un sentiero sulla mappa ----------
   // Un fumetto con il segnavia e il nome, e il sentiero evidenziato; toccando il fumetto si apre la scheda,
   // toccando un punto vuoto della mappa il fumetto si chiude e torna la mappa com'era.
@@ -799,7 +831,7 @@
     div.className = "anteprima";
     div.setAttribute("role", "button");
     div.tabIndex = 0;
-    div.innerHTML = `${segnavia(s, 30)}<span class="ant-nome">${esc(QT.titoloSentiero(s))}</span><span class="ant-vai" aria-hidden="true">›</span>`;
+    div.innerHTML = `${segnavia(s, 30)}<span class="ant-nome">${esc(QT.titoloSentiero(s))}${avvisoCai(s) ? `<small class="ant-cai cai-${avvisoCai(s)}">⚠ ${PERCORRIBILITA[avvisoCai(s)]}</small>` : ""}</span><span class="ant-vai" aria-hidden="true">›</span>`;
     const apri = () => { chiudiAnteprima(); mostraSentiero(s); };
     div.addEventListener("click", (e) => { e.stopPropagation(); apri(); });
     div.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); apri(); } });
@@ -893,6 +925,16 @@
           title: QT.titoloSentiero(s), zIndexOffset: -500
         }).on("click", tocca).addTo(livelli.etichette);
       }
+      // non percorribile (o solo in parte) secondo il CAI: un avviso sul sentiero
+      const av = avvisoCai(s);
+      if (av) {
+        const l = s.g.reduce((a, b) => (b.length > a.length ? b : a));
+        const m = l[Math.floor(l.length * (etichetta ? 0.25 : 0.5))];
+        L.marker(m, {
+          icon: L.divIcon({ className: "", html: `<div class="avviso-cai cai-${av}">!</div>`, iconSize: [22, 22], iconAnchor: [11, 11] }),
+          title: PERCORRIBILITA[av] + " (CAI)", zIndexOffset: -400
+        }).on("click", tocca).addTo(livelli.etichette);
+      }
       lineePerId.set(s.i, { linee, bordo, etichetta, apri });
     }
     if (scelto) scegliSentiero(stato.viciniS.find((x) => x.i === scelto.i) || scelto);
@@ -927,7 +969,10 @@
     li.className = "voce";
     li.tabIndex = 0;
     const meta = [pastiglia(s.d), `<span>${QT.formattaKm(s.l)}</span>`];
-    if (s.su != null) meta.push(`<span>↗ ${s.su} m</span>`);
+    const av = avvisoCai(s);
+    if (av) meta.unshift(`<span class="tag cai-${av}">⚠ ${PERCORRIBILITA[av]}</span>`);
+    const c = datoCai(s), su = s.su != null ? s.su : c && c.su;
+    if (su != null) meta.push(`<span>↗ ${su} m</span>`);
     const sotto = QT.sottotitoloSentiero(s);
     if (sotto && sotto !== QT.titoloSentiero(s)) meta.push(`<span>${esc(sotto)}</span>`);
     li.innerHTML = `

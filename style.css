@@ -639,3 +639,22 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .installa-dopo { border: 2px solid var(--bordo); background: var(--superficie); color: var(--testo-2); }
 .installa-ok { border: 0; background: var(--blu); color: var(--su-colore); }
 @media (prefers-reduced-motion: reduce) { .installa { animation: none; } }
+
+/* ---------- Catasto sentieri CAI: percorribilità ---------- */
+.cai-stato { margin: 10px 0 4px; padding: 8px 10px; border-radius: 8px; border-left: 5px solid; background: #f3f6f2; color: #111; }
+.cai-stato b { display: block; font-size: 15px; }
+.cai-stato span { font-size: 12px; color: #555; }
+.cai-stato p { margin: 6px 0 0; font-size: 14px; }
+.cai-stato.cai-ok { border-color: #1f7a3f; background: #e9f5ec; }
+.cai-stato.cai-ok b { color: #1f7a3f; }
+.cai-stato.cai-parz { border-color: #d97706; background: #fff4e0; }
+.cai-stato.cai-parz b { color: #a85a00; }
+.cai-stato.cai-no { border-color: #c62828; background: #fdecea; }
+.cai-stato.cai-no b { color: #c62828; }
+.avviso-cai { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font: 800 15px/1 system-ui, sans-serif;
+  color: #fff; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.45); cursor: pointer; }
+.avviso-cai.cai-no { background: #c62828; }
+.avviso-cai.cai-parz { background: #e07b00; }
+.ant-cai { display: block; font-size: 12px; font-weight: 700; }
+.ant-cai.cai-no, .tag.cai-no { color: #c62828; }
+.ant-cai.cai-parz, .tag.cai-parz { color: #c96a00; }

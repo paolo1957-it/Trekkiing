@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /*
  * Qui-Trekking – scarica da OpenStreetMap (Overpass) sentieri, rifugi, bivacchi, fontanelle e sorgenti di tutta
- * la Lombardia (più 15 km oltre i confini) e li salva nel sito, divisi in "tessere" da 0,1 gradi.
- * Dentro la Lombardia l'app legge da qui e non dipende dai server pubblici di OpenStreetMap, spesso lenti o fuori uso.
+ * la Lombardia e la Valle d'Aosta (più 15 km oltre i confini) e li salva nel sito, divisi in "tessere" da 0,1 gradi.
+ * Dentro queste regioni l'app legge da qui e non dipende dai server pubblici di OpenStreetMap, spesso lenti o fuori uso.
  *
  * Lo esegue GitHub (vedi .github/workflows/pubblica.yml): ogni lunedì riscarica tutto, a blocchi di mezzo grado
  * per non chiedere troppo in una volta sola a Overpass. I dati NON vengono salvati nel repository, finiscono solo
@@ -21,8 +21,10 @@ const fs = require("fs");
 const path = require("path");
 const QT = require("./core.js");
 
-// Lombardia (riquadro che la contiene) e quanto prendere oltre i confini
+// Regioni salvate nel sito (riquadri che le contengono) e quanto prendere oltre i confini
 const LOMBARDIA = [44.68, 8.50, 46.64, 11.43];
+const VALLE_AOSTA = [45.46, 6.80, 45.99, 7.94];
+const ZONE = [LOMBARDIA, VALLE_AOSTA];
 const MARGINE_KM = 15;
 const BLOCCO = 0.5;          // lato dei blocchi chiesti a Overpass, in gradi
 const PASSO = 0.1;           // lato delle tessere del sito, in gradi (circa 11 × 8 km)
@@ -166,7 +168,8 @@ function salva(raccolta, zona) {
   const indice = {
     versioneDati: VERSIONE_DATI,
     passo: PASSO,
-    zona: LOMBARDIA,        // dentro questo riquadro l'app usa i dati del sito
+    zona: LOMBARDIA,        // per le versioni dell'app che conoscono un solo riquadro
+    zone: ZONE,             // dentro questi riquadri l'app usa i dati del sito
     scaricata: zona,
     aggiornato: new Date().toISOString().replace(/\.\d+Z$/, "Z"),
     sentieri: nSentieri,
@@ -187,8 +190,8 @@ const scriviIndice = (indice) => fs.writeFileSync(path.join(CARTELLA, "indice.js
 // (MINUTI_MAX) si saltano i rimanenti. Restituisce i blocchi mancanti.
 async function scaricaTutto() {
   const scadenza = Date.now() + (+process.env.MINUTI_MAX || 270) * 60000;
-  const zona = allarga(LOMBARDIA);
-  let lista = blocchi(zona);
+  const zona = ZONE.map(allarga);
+  let lista = zona.flatMap(blocchi);
   // per provare: BLOCCHI=21,22 scarica solo quei blocchi
   if (process.env.BLOCCHI) lista = process.env.BLOCCHI.split(",").map((i) => lista[+i]).filter(Boolean);
   const raccolta = { rel: new Map(), punti: new Map() };
@@ -326,4 +329,4 @@ async function main() {
 }
 
 if (require.main === module) main();
-else module.exports = { LOMBARDIA, allarga, blocchi, unisciBlocchi, semplifica, salva, riempiBuchi };
+else module.exports = { LOMBARDIA, VALLE_AOSTA, ZONE, allarga, blocchi, unisciBlocchi, semplifica, salva, riempiBuchi };

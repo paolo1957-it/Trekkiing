@@ -1,5 +1,5 @@
 /*
- * Qui-Trekking – dati del Catasto sentieri CAI (OSM2CAI, https://osm2cai.cai.it) per la Lombardia.
+ * Qui-Trekking – dati del Catasto sentieri CAI (OSM2CAI, https://osm2cai.cai.it) per Lombardia e Valle d'Aosta.
  * Per ogni sentiero (chiave = numero della relazione OpenStreetMap): percorribilità con nota e data,
  * tempi di percorrenza nei due sensi, salita e discesa. Scrive dati/cai.json, letto dall'app nella scheda.
  *
@@ -14,7 +14,11 @@ const fs = require("fs");
 const path = require("path");
 
 const API = "https://osm2cai.cai.it/api";
-const REGIONE = "D";              // Lombardia, nella numerazione di OSM2CAI
+// Regioni nella numerazione di OSM2CAI (trovate interrogando l'API il 6/11/2026):
+// A Friuli Venezia Giulia, B Veneto, C Trentino-Alto Adige, D Lombardia, E Piemonte, F Valle d'Aosta,
+// G Liguria, H Emilia-Romagna, L Toscana, M Marche, N Umbria, O Lazio, P Abruzzo, Q Molise,
+// R Puglia, S Campania, T Basilicata, U Calabria, V Sicilia, Z Sardegna
+const REGIONI = ["D", "F"];       // Lombardia e Valle d'Aosta, come la zona dei sentieri
 const STATI = [1, 2, 3, 4];       // stato di accatastamento: 4 = validato dal CAI
 const CARTELLA = path.join(__dirname, "dati");
 const FILE = path.join(CARTELLA, "cai.json");
@@ -85,9 +89,11 @@ async function main() {
 
   // elenco: id OSM2CAI → data dell'ultima modifica
   const elenco = {};
-  for (const sda of STATI) Object.assign(elenco, await json(`${API}/v2/hiking-routes/region/${REGIONE}/${sda}`, 120000));
+  for (const reg of REGIONI) {
+    for (const sda of STATI) Object.assign(elenco, await json(`${API}/v2/hiking-routes/region/${reg}/${sda}`, 120000));
+  }
   const ids = Object.keys(elenco);
-  console.log(`OSM2CAI: ${ids.length} sentieri in Lombardia`);
+  console.log(`OSM2CAI: ${ids.length} sentieri nelle regioni ${REGIONI.join(", ")}`);
 
   const quandoVecchi = vecchi.__aggiornato;
   delete vecchi.__aggiornato;

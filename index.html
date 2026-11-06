@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="style.css?v=22">
+  <link rel="stylesheet" href="style.css?v=23">
 </head>
 <body>
   <div class="app">
@@ -115,6 +115,11 @@
           <img src="icon-192.png?v=8" alt="" width="36" height="36">
           <span><b>Installa l'app</b><small>Metti l'icona di Qui-Trekking sulla schermata Home</small></span>
         </button>
+
+        <section class="salvati" id="salvati" aria-labelledby="salvati-titolo" hidden>
+          <h3 id="salvati-titolo">Salvati per l'uso senza rete</h3>
+          <ol class="lista" id="lista-salvati"></ol>
+        </section>
 
         <label class="auto" for="auto-refresh">
           <span>AUTO-REFRESH</span>
@@ -228,7 +233,13 @@
           <p><b>Street View agli estremi</b>: due pulsanti aprono Google Maps con la foto sferica più vicina a ciascuna estremità
             del sentiero, da girare col dito. In montagna spesso non c'è la macchina di Google: si vede la foto sferica di un escursionista
             o quella della strada più vicina.</p>
-          <p><b>Scarica il percorso</b>: scegli il formato (GPX va bene quasi ovunque; KML per Google Earth; GeoJSON per i programmi
+          <p><b>Salva per l'uso senza rete</b>: prima di partire, con la connessione, salva sul telefono uno o più sentieri.
+            L'app tiene la traccia, i numeri, il dislivello, i dati del CAI e la <b>mappa topografica</b> intorno al percorso.
+            Senza campo li trovi in alto nella pagina <b>Elenco</b>: toccane uno e poi <b>Cammina sul sentiero</b>, la freccia e la
+            distanza funzionano con il solo GPS. Per toglierlo, nella sua scheda tocca <b>Togli dai salvati</b>.
+            Senza rete usa la mappa <b>Topografica</b>: le altre non sono salvate. Su iPhone conviene installare l'app sulla schermata Home,
+            altrimenti Safari può cancellare i dati salvati dopo qualche settimana senza usarla.</p>
+          <p><b>Scarica il percorso</b> (tocca il pulsante per aprire il riquadro): scegli il formato (GPX va bene quasi ovunque; KML per Google Earth; GeoJSON per i programmi
             di mappe) e la direzione, poi tocca <b>Salva il file</b>: finisce nei Download dell'app File. Da lì toccalo (o tienilo premuto,
             Condividi) e scegli l'app di navigazione, per esempio OsmAnd. In OsmAnd la traccia finisce in I miei luoghi → Tracce. Il tracciato intero viene da Waymarked Trails; se non risponde,
             il file usa la traccia dell'app, semplificata.</p>
@@ -315,7 +326,7 @@
             <li>Scegli sentieri adatti alla tua preparazione e controlla il <b>meteo</b> prima di partire.</li>
             <li>Non bere l'acqua delle <b>sorgenti</b> se non è indicata come potabile.</li>
             <li>Metti l'icona sulla schermata Home: nella pagina Elenco tocca <b>Installa l'app</b> e segui i passaggi (su iPhone: in Safari <b>Condividi → Aggiungi alla schermata Home</b>).</li>
-            <li>Apri l'app <b>prima di partire</b>, quando hai ancora campo: i dati restano salvati sul telefono.</li>
+            <li>Apri l'app <b>prima di partire</b>, quando hai ancora campo, e tocca <b>Salva per l'uso senza rete</b> nella scheda dei sentieri che vuoi fare.</li>
             <li>Al primo avvio consenti l'accesso alla <b>posizione</b>. Tocca la mappa una volta per abilitare suoni e voce.</li>
             <li>Ti è utile? In alto nella pagina Elenco tocca il pulsante verde <b>Condividi</b>: si apre WhatsApp con un messaggio già scritto e il link all'app.</li>
             <li>Il numero di <b>versione</b>, nell'ultima riga della pagina Elenco, ti dice se hai l'ultimo aggiornamento.</li>
@@ -343,9 +354,9 @@
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="config.js?v=22"></script>
+  <script src="config.js?v=23"></script>
   <script src="core.js?v=17"></script>
-  <script src="app.js?v=22"></script>
+  <script src="app.js?v=23"></script>
   <script src="installa.js?v=20"></script>
 
   <!-- Statistiche d'uso anonime, senza cookie: https://trekking.goatcounter.com

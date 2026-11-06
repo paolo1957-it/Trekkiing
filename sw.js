@@ -1,12 +1,17 @@
 // Qui-Trekking – service worker: rende l'app installabile e apribile offline.
 // Cambia il nome della cache a ogni aggiornamento: così l'iPhone capisce che c'è una versione nuova.
 const CACHE = "trekking-25";
+// Leaflet viene da unpkg: lo si tiene anche lui, se no senza rete la mappa non parte
+const ESTERNI = ["https://unpkg.com/leaflet@1.9.4/dist/leaflet.js", "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"];
+// Tessere della mappa salvate con «Salva per l'uso senza rete» (le mette l'app)
+const MAPPE = "mappe-salvate";
 const FILE = ["./", "index.html", "style.css", "config.js", "core.js", "app.js", "installa.js", "favicon-64.png", "apple-touch-icon.png", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "manifest.webmanifest"];
 
 self.addEventListener("install", (e) => {
   // "reload": scarica i file dal sito, non dalla memoria del browser
   e.waitUntil(caches.open(CACHE)
-    .then((c) => c.addAll(FILE.map((f) => new Request(f, { cache: "reload" }))))
+    .then((c) => c.addAll(FILE.map((f) => new Request(f, { cache: "reload" })))
+      .then(() => c.addAll(ESTERNI).catch(() => {})))
     .then(() => self.skipWaiting()));
 });
 self.addEventListener("activate", (e) => {
@@ -14,7 +19,16 @@ self.addEventListener("activate", (e) => {
 });
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
-  if (e.request.method !== "GET" || url.origin !== location.origin) return;
+  if (e.request.method !== "GET") return;
+  if (url.origin !== location.origin) {
+    // mappa topografica: prima le tessere salvate, poi la rete
+    if (/(^|\.)tile\.opentopomap\.org$/.test(url.hostname)) {
+      e.respondWith(caches.open(MAPPE).then((c) => c.match(e.request.url)).then((r) => r || fetch(e.request)));
+    } else if (ESTERNI.includes(e.request.url)) {
+      e.respondWith(fetch(e.request).catch(() => caches.match(e.request.url)));
+    }
+    return;
+  }
   // File di percorso preparati dall'app («Salva il file»): un indirizzo vero del sito, così l'iPhone
   // lo scarica come un file qualsiasi (anche dall'app installata, dove i download "blob:" non vanno).
   if (url.pathname.includes("/scarica/")) {

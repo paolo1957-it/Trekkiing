@@ -605,6 +605,19 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .pop-scelte-col { flex-direction: column; }
 .pop-scelte label { display: flex; align-items: center; gap: 8px; min-height: 40px; cursor: pointer; }
 .pop-scelte input { width: 22px; height: 22px; margin: 0; accent-color: #1f6fb2; }
+.pop .pop-apri-scarica, .pop .pop-salva {
+  display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; border: 0; cursor: pointer;
+  background: var(--bg); color: var(--testo);
+}
+.pop .pop-salva { background: #1f6fb2; color: #fff; }
+.pop .pop-salva[disabled] { opacity: .8; cursor: progress; }
+.salvato-box { margin-top: 14px; padding: 10px 12px; border-radius: 12px; border-left: 5px solid #1f7a3f; background: #e9f5ec; color: #111; }
+.salvato-box b { display: block; font-size: 17px; color: #1f7a3f; }
+.salvato-box span { display: block; margin-top: 2px; font-size: 14px; color: #444; }
+.salvato-azioni { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.salvato-azioni button { flex: 1 1 140px; padding: 10px 12px; border-radius: 10px; border: 1px solid #b9c7bd; background: #fff; color: #111; font: 600 15px var(--font-body); cursor: pointer; }
+.salvati { margin: 10px 0 4px; padding: 8px 10px 4px; border-radius: 12px; border-left: 5px solid #1f6fb2; background: var(--bg); }
+.salvati h3 { margin: 0 0 2px; font: 700 13px var(--font-body); color: var(--testo-2); text-transform: uppercase; letter-spacing: .04em; }
 .pop .pop-ottieni { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin-top: 10px; border: 0; cursor: pointer; }
 
 /* ---- Installa l'app: riquadro in basso e voce nella pagina Elenco ---- */

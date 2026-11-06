@@ -179,7 +179,8 @@
   // Percorribilità (con nota e data della segnalazione), tempi e dislivelli del CAI, scaricati il lunedì
   // con gli altri dati. Chiave: numero della relazione OpenStreetMap. Se il file non c'è, se ne fa a meno.
   let cai = {};
-  const datoCai = (s) => (s && s.i && s.i[0] === "r" ? cai[s.i.slice(1)] : null);
+  const salvati = new Map();   // sentieri salvati per l'uso senza rete: id → { s, cai, tessere, mappa, quando }
+  const datoCai = (s) => (s && s.i && s.i[0] === "r" ? cai[s.i.slice(1)] || (salvati.has(s.i) && salvati.get(s.i).cai) || null : null);
   const PERCORRIBILITA = { ok: "Percorribile", parz: "Percorribile in parte", no: "Non percorribile" };
   const avvisoCai = (s) => { const c = datoCai(s); return c && (c.s === "no" || c.s === "parz") ? c.s : null; };
   function boxCai(c) {
@@ -199,8 +200,10 @@
       if (db) return db;
       db = new Promise((ok, ko) => {
         if (!window.indexedDB) return ko(new Error("no idb"));
-        const r = indexedDB.open("trekking", 1);
-        r.onupgradeneeded = () => { ["foto", "dati", "quote"].forEach((n) => r.result.createObjectStore(n)); };
+        const r = indexedDB.open("trekking", 2);
+        r.onupgradeneeded = () => {
+          ["foto", "dati", "quote", "salvati"].forEach((n) => { if (!r.result.objectStoreNames.contains(n)) r.result.createObjectStore(n); });
+        };
         r.onsuccess = () => ok(r.result);
         r.onerror = () => ko(r.error);
       });
@@ -217,7 +220,9 @@
     }
     return {
       leggi: (store, id) => op(store, "readonly", (s) => s.get(id)),
-      salva: (store, id, v) => op(store, "readwrite", (s) => s.put(v, id))
+      salva: (store, id, v) => op(store, "readwrite", (s) => s.put(v, id)),
+      togli: (store, id) => op(store, "readwrite", (s) => s.delete(id)),
+      tutti: (store) => op(store, "readonly", (s) => s.getAll())
     };
   })();
 
@@ -498,7 +503,7 @@
 
   // Estremità del sentiero più vicina a te (o al punto cercato): dove attaccare il sentiero
   function attacco(s) {
-    const c = stato.gps || stato.centro;
+    const c = stato.gps || stato.centro || { lat: mappa.getCenter().lat, lon: mappa.getCenter().lng };
     return QT.estremita(s).sort((a, b) => QT.distanza(c.lat, c.lon, a[0], a[1]) - QT.distanza(c.lat, c.lon, b[0], b[1]))[0];
   }
 
@@ -573,7 +578,7 @@
     const waymarked = `<a class="pop-link" href="https://hiking.waymarkedtrails.org/#route?id=${attr(s.i.slice(1))}" target="_blank" rel="noopener">Profilo e dettagli su Waymarked Trails</a>`;
     const testa = `<div class="pop-testa">${segnavia(s, 30)}<h3>${esc(tit)}</h3></div>`;
     return `<div class="pop pop-sentiero" data-voce="${attr(voce.join(" "))}" data-sentiero="${attr(s.i)}">${testa}${righe.join("")}
-      <div class="pop-pulsanti">${pulsanti.join("")}</div>${sv}${scaricaHtml(s)}${invia}${waymarked}</div>`;
+      <div class="pop-pulsanti">${pulsanti.join("")}</div>${sv}<div class="pop-offline"></div>${scaricaHtml(s)}${invia}${waymarked}</div>`;
   }
 
   // ---------- Scarica il percorso (GPX, KML, GeoJSON) ----------
@@ -597,7 +602,9 @@
       `<label><input type="radio" name="scarica-formato" value="${v}"${i ? "" : " checked"}> ${t}</label>`).join("");
     const dir = [[1, `${esc(a)} → ${esc(b)}`], [-1, `${esc(b)} → ${esc(a)}`], [0, "entrambe le direzioni"]].map(([v, t], i) =>
       `<label><input type="radio" name="scarica-dir" value="${v}"${i ? "" : " checked"}> <span>${t}</span></label>`).join("");
-    return `<div class="pop-scarica"><b>Scarica il percorso</b>
+    // chiuso in un pulsante con lo stesso nome; si apre toccandolo e si richiude uscendo dalla scheda
+    return `<button type="button" class="pop-vai pop-apri-scarica">${ICONA_SCARICA}Scarica il percorso</button>
+      <div class="pop-scarica" hidden><b>Scarica il percorso</b>
       <p class="pop-scarica-spiega">Per aprirlo in un'app di navigazione (Komoot, Gaia GPS, OsmAnd, Google Earth…).</p>
       <fieldset><legend>Formato</legend><div class="pop-scelte">${formati}</div></fieldset>
       <fieldset><legend>Direzione</legend><div class="pop-scelte pop-scelte-col">${dir}</div></fieldset>
@@ -609,6 +616,12 @@
   function preparaScarica(corpo, s) {
     const box = corpo.querySelector(".pop-scarica");
     if (!box) return;
+    const apri = corpo.querySelector(".pop-apri-scarica");
+    if (apri) apri.addEventListener("click", () => {
+      apri.hidden = true;
+      box.hidden = false;
+      box.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
     // con l'itinerario di Waymarked Trails i nomi dei due capi sono più precisi
     dettaglioWmt(s).then((d) => {
       const [a, b] = QT.capiPercorso(s, d);
@@ -664,6 +677,163 @@
     const a = document.createElement("a");
     a.href = url; a.download = nome; a.rel = "noopener";
     document.body.appendChild(a); a.click(); a.remove();
+  }
+
+  // ---------- Salva per l'uso senza rete ----------
+  // Il sentiero (traccia, numeri, dati CAI), le sue quote e la mappa topografica intorno al percorso restano sul telefono:
+  // senza campo lo si apre dalla pagina Elenco e la guida sul sentiero funziona con il solo GPS.
+  // Le tessere della mappa (OpenTopoMap) vanno nella cache "mappe-salvate", da cui le prende il service worker.
+  const CACHE_MAPPE = "mappe-salvate";
+  const ICONA_SALVA = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 3h12v18l-6-4.5L6 21Z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg>';
+  const urlTessera = (z, x, y) => `https://${"abc"[(x + y) % 3]}.tile.opentopomap.org/${z}/${x}/${y}.png`;   // come Leaflet
+  // Tessere entro "margine" metri dal percorso, dallo zoom 12 al 17 (più vicino si ingrandiscono quelle del 17)
+  function tessereSentiero(s) {
+    const punti = [];
+    for (const l of s.g) for (let i = 0; i < l.length; i++) {
+      punti.push(l[i]);
+      if (i === l.length - 1) continue;
+      const [a, b] = [l[i], l[i + 1]];
+      const passi = Math.floor(QT.distanza(a[0], a[1], b[0], b[1]) / 60);   // un punto ogni 60 m
+      for (let k = 1; k <= passi; k++) punti.push([a[0] + (b[0] - a[0]) * k / (passi + 1), a[1] + (b[1] - a[1]) * k / (passi + 1)]);
+    }
+    // per i sentieri lunghi (alte vie) si rinuncia agli zoom più vicini: troppe tessere
+    let out;
+    for (const zMax of [17, 16, 15]) {
+      out = tessereZoom(punti, zMax);
+      if (out.size <= 1500) break;
+    }
+    return [...out];
+  }
+  function tessereZoom(punti, zMax) {
+    const out = new Set();
+    for (let z = 12; z <= zMax; z++) {
+      const n = 2 ** z;
+      const margine = z >= 17 ? 200 : 400;
+      for (const [la, lo] of punti) {
+        const r = la * Math.PI / 180;
+        const x = (lo + 180) / 360 * n, y = (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n;
+        const m = margine / (40075016 * Math.cos(r) / n);
+        for (let tx = Math.floor(x - m); tx <= Math.floor(x + m); tx++) {
+          for (let ty = Math.floor(y - m); ty <= Math.floor(y + m); ty++) out.add(urlTessera(z, tx, ty));
+        }
+      }
+    }
+    return out;
+  }
+  Memoria.tutti("salvati").then((lista) => {
+    (lista || []).forEach((r) => { if (r && r.s) salvati.set(r.s.i, r); });
+    renderSalvati();
+  }).catch(() => {});
+  let salvaInCorso = null, salvaTesto = "";   // sentiero che si sta salvando e a che punto è
+  let salvaUI = null;                            // riquadro "Salva" della scheda aperta: { id, box, disegna }
+  async function salvaSentiero(s, avanzamento) {
+    const pulito = { ...s };
+    delete pulito.distanza; delete pulito.vicino;
+    // quote (per dislivello e profilo senza rete): restano nella memoria del telefono
+    if (s.su == null || !quoteCalcolate.has(s.i)) await calcolaQuote(s).catch(() => null);
+    const tessere = tessereSentiero(s);
+    let ok = 0, fatte = 0;
+    if (window.caches) {
+      const c = await caches.open(CACHE_MAPPE);
+      let i = 0;
+      const lavora = async () => {
+        while (i < tessere.length) {
+          const url = tessere[i++];
+          try {
+            if (await c.match(url)) ok++;
+            else {
+              const r = await fetch(url, { mode: "cors" });
+              if (r.ok) { await c.put(url, r); ok++; }
+            }
+          } catch (e) { /* tessera mancante: si va avanti */ }
+          avanzamento(++fatte / tessere.length);
+        }
+      };
+      await Promise.all([lavora(), lavora(), lavora(), lavora()]);
+    }
+    const rec = { s: pulito, cai: datoCai(s), tessere, mappa: { ok, tot: tessere.length }, quando: Date.now() };
+    await Memoria.salva("salvati", s.i, rec);
+    salvati.set(s.i, rec);
+    if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+    renderSalvati();
+    return rec;
+  }
+  async function togliSentiero(id) {
+    const rec = salvati.get(id);
+    salvati.delete(id);
+    await Memoria.togli("salvati", id).catch(() => {});
+    if (rec && window.caches) {
+      // si cancellano solo le tessere che non servono ad altri sentieri salvati
+      const usate = new Set();
+      for (const r of salvati.values()) (r.tessere || []).forEach((u) => usate.add(u));
+      const c = await caches.open(CACHE_MAPPE);
+      await Promise.all((rec.tessere || []).filter((u) => !usate.has(u)).map((u) => c.delete(u).catch(() => {})));
+    }
+    renderSalvati();
+  }
+  function preparaSalva(corpo, s) {
+    const box = corpo.querySelector(".pop-offline");
+    if (!box) return;
+    const disegna = () => {
+      const rec = salvati.get(s.i);
+      if (salvaInCorso === s.i) {
+        box.innerHTML = `<button type="button" class="pop-vai pop-salva" disabled>${ICONA_SALVA}<span class="pop-salva-testo">${salvaTesto || "Salvo sul telefono…"}</span></button>`;
+      } else if (rec) {
+        const quando = new Date(rec.quando).toLocaleDateString("it-IT", { day: "numeric", month: "long" });
+        const mappa = rec.mappa && rec.mappa.tot && rec.mappa.ok < rec.mappa.tot * 0.95
+          ? `mappa salvata in parte (${Math.round(rec.mappa.ok / rec.mappa.tot * 100)}%): risalvalo con la connessione`
+          : "con la mappa topografica intorno al percorso";
+        box.innerHTML = `<div class="salvato-box"><b>✓ Salvato per l'uso senza rete</b>
+          <span>Il ${quando}, ${mappa}. Senza campo lo trovi nella pagina Elenco, in alto.</span>
+          <div class="salvato-azioni">${rec.mappa && rec.mappa.ok < rec.mappa.tot * 0.95 ? '<button type="button" class="pop-risalva">Salva di nuovo</button>' : ""}
+          <button type="button" class="pop-togli">Togli dai salvati</button></div></div>`;
+      } else {
+        box.innerHTML = `<button type="button" class="pop-vai pop-salva">${ICONA_SALVA}<span class="pop-salva-testo">Salva per l'uso senza rete</span></button>`;
+      }
+      const salva = box.querySelector(".pop-salva:not([disabled]), .pop-risalva");
+      if (salva) salva.addEventListener("click", avvia);
+      const togli = box.querySelector(".pop-togli");
+      if (togli) togli.addEventListener("click", () => {
+        togliSentiero(s.i).then(() => { disegna(); toast("Tolto dai sentieri salvati."); });
+      });
+    };
+    const avvia = async () => {
+      if (navigator.onLine === false) { toast("Serve la connessione per salvare il sentiero."); return; }
+      if (salvaInCorso) { toast("Sto già salvando un altro sentiero: aspetta che finisca."); return; }
+      salvaInCorso = s.i;
+      salvaTesto = "";
+      disegna();
+      // la scheda può essere chiusa e riaperta mentre salva: si aggiorna quella aperta adesso
+      const ui = () => (salvaUI && salvaUI.id === s.i && salvaUI.box.isConnected ? salvaUI : null);
+      try {
+        const rec = await salvaSentiero(s, (f) => {
+          salvaTesto = `Salvo la mappa… ${Math.round(f * 100)}%`;
+          const t = ui() && ui().box.querySelector(".pop-salva-testo");
+          if (t) t.textContent = salvaTesto;
+        });
+        toast(rec.mappa.ok < rec.mappa.tot * 0.95 ? "Sentiero salvato, ma la mappa solo in parte." : "Sentiero salvato: lo trovi anche senza rete.");
+        if (window.goatcounter && window.goatcounter.count) window.goatcounter.count({ path: "salva-offline", title: "Salva sentiero senza rete", event: true });
+      } catch (e) {
+        console.warn("Salvataggio non riuscito", e);
+        toast("Non sono riuscito a salvare il sentiero: c'è abbastanza spazio sul telefono?");
+      }
+      salvaInCorso = null;
+      if (ui()) ui().disegna();
+    };
+    salvaUI = { id: s.i, box, disegna };
+    disegna();
+  }
+  // Elenco: i sentieri salvati, in alto, con la distanza da te
+  function renderSalvati() {
+    const sez = $("salvati"), ol = $("lista-salvati");
+    if (!sez || !ol) return;
+    sez.hidden = !salvati.size;
+    ol.innerHTML = "";
+    const c = stato.gps || stato.centro || { lat: mappa.getCenter().lat, lon: mappa.getCenter().lng };
+    [...salvati.values()].map((r) => {
+      const v = QT.puntoPiuVicino(r.s, c.lat, c.lon);
+      return { ...r.s, distanza: v.distanza, vicino: v.punto };
+    }).sort((a, b) => a.distanza - b.distanza).forEach((s) => ol.appendChild(voceSentiero(s)));
   }
 
   // Street View di Google Maps ai due estremi del sentiero (i più lontani tra loro); per un anello uno solo.
@@ -860,6 +1030,7 @@
     if (s) {
       if (s.su == null || !quoteCalcolate.has(s.i)) riempiQuote(corpo, s);
       preparaScarica(corpo, s);
+      preparaSalva(corpo, s);
       const wa = corpo.querySelector(".pop-whatsapp");
       // il link si prepara al momento del tocco, con la mappa com'è adesso
       if (wa) wa.addEventListener("click", () => {
@@ -1012,6 +1183,7 @@
   }
 
   function renderLista() {
+    renderSalvati();
     const ol = $("lista");
     ol.innerHTML = "";
     const nome = (x) => x.g ? QT.titoloSentiero(x) : QT.titolo(x);

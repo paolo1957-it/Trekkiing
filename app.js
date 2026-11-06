@@ -274,9 +274,10 @@
   }
   async function dalSito(lat, lon, raggio, forza) {
     const ind = await leggiIndice(forza);
-    if (!ind || !ind.zona || !ind.tessere) return null;
-    const [zs, zw, zn, ze] = ind.zona;
-    if (!(lat >= zs && lat <= zn && lon >= zw && lon <= ze)) return null;
+    if (!ind || !(ind.zone || ind.zona) || !ind.tessere) return null;
+    // più regioni (Lombardia, Valle d'Aosta…); i dati più vecchi hanno un solo riquadro in "zona"
+    const zone = ind.zone || [ind.zona];
+    if (!zone.some(([zs, zw, zn, ze]) => lat >= zs && lat <= zn && lon >= zw && lon <= ze)) return null;
     const passo = ind.passo || 0.1;
     const esistenti = new Set(ind.tessere);
     const [s, w, n, e] = QT.riquadro(lat, lon, raggio);

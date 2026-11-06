@@ -55,7 +55,7 @@ Impostazioni del repository → Pages → Source: **GitHub Actions**. A ogni mod
 - `sw.js`, `manifest.webmanifest`: installazione come app
 - `installa.js`: riquadro «Metti Qui-Trekking sul telefono» (poco dopo l'avvio, solo se aperta nel browser; «Più tardi» lo nasconde per 5 giorni) e voce «Installa l'app» nella pagina Elenco. Android/Chrome: pulsante che apre l'installazione; iPhone: i passaggi di Safari; dentro WhatsApp/Facebook: come aprire la pagina nel browser
 - `aggiorna_sentieri.js`, `.github/workflows/pubblica.yml`: scaricamento settimanale di Lombardia e Valle d'Aosta e pubblicazione
-- `aggiorna_cai.js`: percorribilità (con nota e data), tempi e dislivelli dal Catasto sentieri CAI (OSM2CAI) in `dati/cai.json`.
+- `aggiorna_cai.js`: (Lombardia e Valle d'Aosta) percorribilità (con nota e data), tempi e dislivelli dal Catasto sentieri CAI (OSM2CAI) in `dati/cai.json`.
   OSM2CAI accetta 60 richieste al minuto e va interrogato un sentiero alla volta: si riparte dal file pubblicato e si chiedono
   solo i sentieri nuovi o cambiati (al massimo 45 minuti per giro; la prima volta servono due o tre giri per tutti i ~4.000)
 - `dati/`: sentieri e punti, creata da GitHub solo nel sito pubblicato (non sta nel repository)

@@ -1,0 +1,13 @@
+name: Trova i codici regione di OSM2CAI (prova temporanea)
+on:
+  push:
+    branches: [cai-regioni]
+permissions:
+  contents: read
+jobs:
+  trova:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - run: node trova_regioni_cai.js
